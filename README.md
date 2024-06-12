@@ -1,135 +1,144 @@
-Core Features
+# E-Commerce
 
-    User Authentication and Authorization:
-        User registration and login
-        Password recovery 
-        Role-based access control (e.g., admin, seller, customer)
+Welcome to the E-Commerce! In this system there is three type of User Customer, Seller, Admin.
+This system allows users to buy product from Product listing, Add Orders in Cart, Make Payment using APIs,
+or to sell product by Add/Remove Product, Add/Delete Discount, Change StockQuantity.
 
-    Product Catalog:
-        Product listing with images, descriptions, and prices
-        Categories and subcategories
-        Search functionality with filters and sorting options
-        Product details page
+## Core Features
 
-    Shopping Cart:
-        Add/remove products to/from the cart
-        Update product quantities
-        Display total cost
-        Persist cart items across sessions
+- User Authentication and Authorization:
+ User registration and login
+ Password recovery 
+ Role-based access control (e.g., admin, seller, customer)
+ 
+- Product Catalog:
+ Product listing with images, descriptions, and prices
+ Categories and subcategories
+ Search functionality with filters and sorting options
+ Product details page
+ 
+- Shopping Cart:
+ Add/remove products to/from the cart
+ Update product quantities
+ Display total cost
+ Persist cart items across sessions
+ 
+- Checkout Process:
+ Address and shipping information
+ Payment gateway integration (e.g., Stripe, PayPal)
+ Order summary and confirmation
+ Email notifications for order confirmations
+ 
+- Order Management:
+ Order history and tracking for customers
+ Admin dashboard for managing orders
+ Order status updates (e.g. pending, shipped, delivered)
+ 
+- Inventory Management:
+ Stock tracking and updates
+ Alerts for low stock
+ Product variants (e.g., sizes, colors)
+ 
+- User Profile Management:
+ Personal information management
+ Address book for multiple shipping addresses
+ Order history and tracking
+ 
+- Reviews and Ratings:
+ Allow customers to leave reviews and ratings for products
+ Display average ratings and reviews on product pages
 
-    Checkout Process:
-        Address and shipping information
-        Payment gateway integration (e.g., Stripe, PayPal)
-        Order summary and confirmation
-        Email notifications for order confirmations
+## Advanced Features
 
-    Order Management:
-        Order history and tracking for customers
-        Admin dashboard for managing orders
-        Order status updates (e.g., pending, shipped, delivered)
+- Product Recommendations:
+Personalized recommendations based on user behavior
+Related products on product detail pages
 
-    Inventory Management:
-        Stock tracking and updates
-        Alerts for low stock
-        Product variants (e.g., sizes, colors)
+- Discounts and Coupons:
+Create and manage discount codes
+Apply discounts at checkout
 
-    User Profile Management:
-        Personal information management
-        Address book for multiple shipping addresses
-        Order history and tracking
+- Wishlist:
+Allow users to save products to a wishlist for future purchase
 
-    Reviews and Ratings:
-        Allow customers to leave reviews and ratings for products
-        Display average ratings and reviews on product pages
+- Multi-language and Multi-currency Support:
+Support for multiple languages
+Currency conversion based on user's location
 
-Advanced Features
+- Analytics and Reporting:
+Sales reports and analytics for admins
+Customer behavior tracking (e.g., Google Analytics)
 
-    Product Recommendations:
-        Personalized recommendations based on user behavior
-        Related products on product detail pages
+- SEO Optimization:
+SEO-friendly URLs
+Meta tags and descriptions for products and categories
+Sitemap generation
 
-    Discounts and Coupons:
-        Create and manage discount codes
-        Apply discounts at checkout
+## Technical and Infrastructure Requirements
 
-    Wishlist:
-        Allow users to save products to a wishlist for future purchase
+- Backend Technologies:
+Go (Golang) for building the backend services
+RESTful APIs for client-server communication
+JWT for secure authentication
 
-    Multi-language and Multi-currency Support:
-        Support for multiple languages
-        Currency conversion based on user's location
+- Database:
+MySQL for storing data
+Redis for caching
 
-    Analytics and Reporting:
-        Sales reports and analytics for admins
-        Customer behavior tracking (e.g., Google Analytics)
+- Payment Gateway Integration:
+Stripe, PayPal, or other payment processors
 
-    SEO Optimization:
-        SEO-friendly URLs
-        Meta tags and descriptions for products and categories
-        Sitemap generation
+- Email Service:
+SMTP server or email service providers like SendGrid, TempMail or Mailgun for sending transactional emails
 
-Technical and Infrastructure Requirements
+- Search Engine:
+Elasticsearch for advanced search capabilities
 
-    Backend Technologies:
-        Go (Golang) for building the backend services
-        RESTful APIs or GraphQL for client-server communication
-        JWT for secure authentication
-        GORM for database interactions
+## Security Measures
 
-    Frontend Technologies:
-        HTML, CSS, and JavaScript for the user interface
-        React, Angular, or Vue.js for building dynamic single-page applications (SPAs)
+- Data Encryption:
+HTTPS for secure communication
+Encrypt sensitive data in the database
 
-    Database:
-        PostgreSQL or MySQL for storing data
-        Redis for caching
+- Secure Coding Practices:
+Input validation and sanitization
+Protect against SQL injection, XSS, and CSRF attacks
 
-    Hosting and Deployment:
-        Cloud providers like AWS, Google Cloud, or Azure
-        Docker for containerization
-        Kubernetes for container orchestration
+- Regular Audits and Monitoring:
+Regular security audits
+Monitoring tools for real-time threat detection
 
-    Payment Gateway Integration:
-        Stripe, PayPal, or other payment processors
+## Legal and Compliance
 
-    Email Service:
-        SMTP server or email service providers like SendGrid or Mailgun for sending transactional emails
+- Privacy Policy and Terms of Service:
+Clearly defined privacy policies and terms of service
 
-    Search Engine:
-        Elasticsearch for advanced search capabilities
+- Compliance with Regulations:
+GDPR compliance for handling user data in Europe
+PCI-DSS compliance for handling payment information
 
-Security Measures
+## Scalability and Performance
 
-    Data Encryption:
-        HTTPS for secure communication
-        Encrypt sensitive data in the database
+- Load Balancing:
+Distribute traffic across multiple servers
 
-    Secure Coding Practices:
-        Input validation and sanitization
-        Protect against SQL injection, XSS, and CSRF attacks
+- CDN (Content Delivery Network):
+Use CDN to deliver static assets quickly
 
-    Regular Audits and Monitoring:
-        Regular security audits
-        Monitoring tools for real-time threat detection
+- Database Optimization:
+Optimize queries and indexing for performance
 
-Legal and Compliance
+## Route Listing
+- Home Page `https://localhost:4000/`
 
-    Privacy Policy and Terms of Service:
-        Clearly defined privacy policies and terms of service
+- User Page `https://localhost:4000/login/`, `https://localhost:4000/register/`, `https://localhost:4000/forget/password/`,`https://localhost:4000/user-info/`,`https://localhost:4000/update/user-info/`
 
-    Compliance with Regulations:
-        GDPR compliance for handling user data in Europe
-        PCI-DSS compliance for handling payment information
+- Add Product `https://localhost:4000/add/product/`,`https://localhost:4000/update/product/id/`, `https://localhost:4000/del/product/id/`, `https://localhost:4000/product/price/id/`, `https://localhost:4000/publish/id/`
 
-Scalability and Performance
+- Listing `https://localhost:4000/listing/`,`https://localhost:4000/listing/with-search-pattern/`
 
-    Load Balancing:
-        Distribute traffic across multiple servers
+- Order `https://localhost:4000/order/cart/id/`,`https://localhost:4000/order/user-info/id/`,
+`https://localhost:4000/order/payment-info/id/`,`https://localhost:4000/order/submitted/id/`
 
-    CDN (Content Delivery Network):
-        Use CDN to deliver static assets quickly
-
-    Database Optimization:
-        Optimize queries and indexing for performance
-
-Building an e-commerce platform involves a lot of components, and attention to detail is crucial for providing a seamless and secure shopping experience. This list should help you get started with the necessary features and technologies.
+## Conclusion
+Building an e-commerce platform involves a lot of components, and attention to detail is crucial for providing a seamless and secure shopping experience.

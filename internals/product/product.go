@@ -1,11 +1,11 @@
-package products
+package product
 
 import "database/sql"
 
 type Product interface {
-	InsertItem(*Products) error
-	UpdateItem(*Products, int) error
-	DeleteItem(int, int) error
+	InsertProduct(*Products) error
+	UpdateProduct(*Products, int) error
+	DeleteProduct(int, int) error
 }
 
 type Products struct {
@@ -22,8 +22,8 @@ type ProductDB struct {
 	DB *sql.DB
 }
 
-func (pr *ProductDB) InsertItem(product *Products) error {
-	_, err := pr.DB.Exec("INSERT INTO `Products`(`title`,`Category`, `SubCategory`, `Description`, `Uid`, `Instock`,`Cost`) VALUES($1,$2,$3,$4,$5,$6,$7)", product.Title, product.Category, product.SubCategory, product.Description, product.Uid, product.InStock, product.Cost)
+func (pr *ProductDB) ListProduct(product *Products) error {
+	_, err := pr.DB.Exec("INSERT INTO `object`(`id`, `title`, `quantity`, `category`, `sub-category`, `descriptions`, `price`, `uid`, `last_updated`, `is_deleted`) VALUES ($1,$2,$3,$4,$5)", product.Title, product.Category, product.SubCategory, product.Description, product.Uid, product.InStock, product.Cost)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func (pr *ProductDB) InsertItem(product *Products) error {
 	return nil
 }
 
-func (pr *ProductDB) DeleteItem(Uid, ProductId string) error {
+func (pr *ProductDB) DeleteProduct(Uid, ProductId string) error {
 	_, err := pr.DB.Exec("UPDATE `Products` SET `IsDeleted` = 0 WHERE `id` = $1 AND `Uid` = $2", Uid, ProductId)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (pr *ProductDB) DeleteItem(Uid, ProductId string) error {
 	return nil
 }
 
-func (pr *ProductDB) UpdateItem(product *Products, Pid int) error {
+func (pr *ProductDB) UpdateProduct(product *Products, Pid int) error {
 	_, err := pr.DB.Exec("UPDATE `Products` SET `title` = $1,`Category`= $2, `SubCategory`= $3, `Description`= $4, `Instock`= $5, `Cost` = $6 WHERE Uid=$7 AND id = $8", product.Title, product.Category, product.SubCategory, product.Description, product.InStock, product.Cost, product.Uid, Pid)
 	if err != nil {
 		return err

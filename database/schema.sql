@@ -1,138 +1,139 @@
--- Create database if it doesn't exist
-CREATE DATABASE IF NOT EXISTS `ecommerce`;
-USE `ecommerce`;
 
--- Create Category table
-CREATE TABLE IF NOT EXISTS `category_main` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `category` VARCHAR(50) NOT NULL
-);
+create database ecommerce;
 
--- Create Category table
-CREATE TABLE IF NOT EXISTS `category_sub` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `sub-category` VARCHAR(50) NOT NULL,
-  `category` INT(11) NOT NULL
-);
-
--- Create UserFavouriteListing table
-CREATE TABLE IF NOT EXISTS `object_fav` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `uid` int(11) NOT NULL,
-  `object_id` int(11) NOT NULL
-);
-
--- Create users table 
-
-CREATE TABLE IF NOT EXISTS `seller` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `email` VARCHAR(100) UNIQUE NOT NULL,
-  `password` VARCHAR(100) NOT NULL,
-  `last_login` DATETIME DEFAULT current_timestamp(),
-  `login_token` VARCHAR(100) DEFAULT NULL,
-  `active` tinyint(1) DEFAULT 0,
-  `pancard` VARCHAR(10) NOT NULL,
-  `activation_token` VARCHAR(100) DEFAULT NULL
-);
+CREATE TABLE seller_info (
+  id SERIAL PRIMARY KEY ,
+  user_id INTEGER UNIQUE NOT NULL,
+  pancard VARCHAR(100) UNIQUE NOT NULL,
+  addr text not null,
+  state VARCHAR(50) not null,
+  district VARCHAR(50) not null,
+  pincode INTEGER NOT NULL
+  );
 
 
 -- Create users table 
 
-CREATE TABLE IF NOT EXISTS `user` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `email` VARCHAR(100) UNIQUE NOT NULL,
-  `password` VARCHAR(100) NOT NULL,
-  `last_login` DATETIME DEFAULT current_timestamp(),
-  `login_token` VARCHAR(100) DEFAULT NULL,
-  `active` tinyint(1) DEFAULT 0,
-  `activation_token` VARCHAR(100) DEFAULT NULL
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY ,
+  email VARCHAR(100) UNIQUE NOT NULL,
+  password VARCHAR(100) NOT NULL,
+  seller boolean DEFAULT FALSE,
+  last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  login_token VARCHAR(100) DEFAULT NULL,
+  active BOOLEAN DEFAULT FALSE,
+  activation_token VARCHAR(100) DEFAULT NULL
 );
 
 --  Create forget_passw table 
 
-CREATE TABLE IF NOT EXISTS `user_forget_passw` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `uid` int(11) NOT NULL,
-  `uri` VARCHAR(100) NOT NULL,
-  `created_at` DATETIME DEFAULT current_timestamp(),
-  `superseded` tinyint(1) DEFAULT 0
+CREATE TABLE user_forget_passw (
+  id SERIAL PRIMARY KEY ,
+  user_id INTEGER NOT NULL,
+  uri VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  superseded BOOLEAN DEFAULT FALSE
 );
 
 --  Create user_log table 
 
-CREATE TABLE IF NOT EXISTS `user_log` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `activity` VARCHAR(50) NOT NULL,
-  `uid` int(11) NOT NULL,
-  `created_at` DATETIME DEFAULT current_timestamp(),
-  `superseded` tinyint(1) DEFAULT 0
+CREATE TABLE user_log (
+  id SERIAL PRIMARY KEY ,
+  activity VARCHAR(50) NOT NULL,
+  user_id INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  superseded BOOLEAN DEFAULT FALSE
 );
 
--- Create object table
-CREATE TABLE IF NOT EXISTS `object` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `title` VARCHAR(255) NOT NULL,
-  `quantity` int(11) NOT NULL,
-  `category` INT NOT NULL,
-  `sub-category` INT NOT NULL,
-  `descriptions` text NOT NULL,
-  `price` decimal(5,2) NOT NULL,
-  `uid` int(11) NOT NULL,
-  `last_updated` DATETIME NOT NULL,
-  `is_deleted` tinyint(1) DEFAULT 0
+-- Create Category table
+
+CREATE TABLE category_main (
+  id SERIAL PRIMARY KEY ,
+  category VARCHAR(50) NOT NULL
 );
 
--- Create order-status table
-CREATE TABLE IF NOT EXISTS `order_status` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `tab1` tinyint(1) DEFAULT 0,
-  `tab2` tinyint(1) DEFAULT 0,
-  `tab3` tinyint(1) DEFAULT 0,
-  `tab4` tinyint(1) DEFAULT 0,
-  `tab5` tinyint(1) DEFAULT 0,
-  `final` tinyint(1) DEFAULT 0,
-  `order_id` int(11) NOT NULL
+-- Create Category table
+
+CREATE TABLE category_sub (
+  id SERIAL PRIMARY KEY ,
+  sub_category VARCHAR(50) NOT NULL,
+  category INTEGER NOT NULL
 );
 
+-- Create product table
 
-CREATE TABLE IF NOT EXISTS `order_listing` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `object_id` int(11) NOT NULL,
-  `uid` int(11) NOT NULL,
-  `quantity` int(11) NOT NULL,
-  `price` decimal(5,2) NOT NULL,
-  `is_active` tinyint(1) DEFAULT 0,
-  `completed` tinyint(1) DEFAULT 0
+CREATE TABLE product (
+  id SERIAL PRIMARY KEY ,
+  title VARCHAR(255) NOT NULL,
+  quantity INTEGER NOT NULL,
+  category INT NOT NULL,
+  sub_category INT NOT NULL,
+  descriptions text NOT NULL,
+  price decimal(5,2) NOT NULL,
+  user_id INTEGER NOT NULL,
+  last_updated TIMESTAMP NOT NULL,
+  is_deleted BOOLEAN DEFAULT FALSE
 );
 
-CREATE TABLE IF NOT EXISTS `order_contact` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `order_id` int(11) NOT NULL,
-  `addr` VARCHAR(50) NOT NULL,
-  `phone` VARCHAR(50) NOT NULL
+-- Create productFavourite table
+
+CREATE TABLE favourite_product (
+  id SERIAL PRIMARY KEY ,
+  user_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL
 );
 
+-- table product log
 
-CREATE TABLE IF NOT EXISTS `order_payment` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `order_id` int(11) NOT NULL,
-  `payment_id` int(11) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS `object_log` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `activity` VARCHAR(50) NOT NULL,
-  `uid` int(11) NOT NULL,
-  `object_id` int(11) NOT NULL,
-  `created_at` DATETIME DEFAULT current_timestamp(),
-  `superseded` tinyint(1) DEFAULT 0
+CREATE TABLE product_log (
+  id SERIAL PRIMARY KEY ,
+  activity VARCHAR(50) NOT NULL,
+  user_id INTEGER NOT NULL,
+  product_id INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  superseded BOOLEAN DEFAULT FALSE
 );
 
 
-CREATE TABLE IF NOT EXISTS `order_log` (
-  `id` int(11) PRIMARY KEY AUTO_INCREMENT NOT NULL,
-  `activity` VARCHAR(50) NOT NULL,
-  `order_id` int(11) NOT NULL,
-  `created_at` DATETIME DEFAULT current_timestamp(),
-  `superseded` tinyint(1) DEFAULT 0
+-- order payment related work
+
+CREATE TABLE order_payment (
+  id SERIAL PRIMARY KEY ,
+  total_amount decimal(10,2) not null,
+  transaction_id INTEGER NOT NULL,
+  transaction_status BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+);
+
+
+CREATE TABLE cart (
+  id SERIAL PRIMARY KEY ,
+  product_id INT NOT NULL,
+  user_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  active BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE order_listing (
+  id SERIAL PRIMARY KEY ,
+  cart_id INTEGER UNIQUE NOT NULL,
+  addr TEXT NOT NULL,
+  total_price decimal(10,4) not null,
+  payment_id INTEGER DEFAULT NULL,
+  processed BOOLEAN DEFAULT FALSE,
+  completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- order log
+
+CREATE TABLE order_log (
+  id SERIAL PRIMARY KEY ,
+  activity VARCHAR(50) NOT NULL,
+  order_id INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  superseded BOOLEAN DEFAULT FALSE
 );

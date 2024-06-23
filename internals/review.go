@@ -1,4 +1,4 @@
-package review
+package models
 
 import "database/sql"
 

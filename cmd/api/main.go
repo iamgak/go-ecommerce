@@ -8,10 +8,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/iamgak/go-ecommerce/internals/cart"
-	"github.com/iamgak/go-ecommerce/internals/checkout"
-	"github.com/iamgak/go-ecommerce/internals/object"
-	"github.com/iamgak/go-ecommerce/internals/user"
+	models "github.com/iamgak/go-ecommerce/internals"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -21,15 +18,16 @@ type Config struct {
 }
 
 type Application struct {
-	InfoLog       *log.Logger
-	ErrorLog      *log.Logger
-	DB            *sql.DB
-	Cart          *cart.CartDB
-	Checkout      *checkout.OrderDB
-	User          *user.UserDB
-	Object        *object.ObjectDB
-	Authenticated bool
-	Uid           int
+	InfoLog  *log.Logger
+	ErrorLog *log.Logger
+	DB       *sql.DB
+	Cart     models.CartModelInterface
+	Order    models.OrderModelInterface
+	User     models.UserModelInterface
+	Object   models.ProductModelInterface
+	Payment  models.PaymentModelInterface
+	Seller   bool
+	Uid      int
 	// session         *sessions.CookieStore
 	// isAuthenticated bool
 }
@@ -65,10 +63,11 @@ func main() {
 		ErrorLog: errorLog,
 		InfoLog:  infoLog,
 		DB:       db,
-		User:     &user.UserDB{DB: db},
-		Cart:     &cart.CartDB{DB: db},
-		Checkout: &checkout.OrderDB{DB: db},
-		Object:   &object.ObjectDB{DB: db},
+		User:     &models.UserDB{DB: db},
+		Cart:     &models.CartDB{DB: db},
+		Order:    &models.OrderDB{DB: db},
+		Object:   &models.ObjectDB{DB: db},
+		Payment:  &models.PaymentDB{DB: db},
 		// session:  store,
 	}
 	serve := &http.Server{

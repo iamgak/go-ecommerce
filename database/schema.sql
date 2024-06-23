@@ -4,17 +4,27 @@ create database ecommerce;
 CREATE TABLE seller_info (
   id SERIAL PRIMARY KEY ,
   user_id INTEGER UNIQUE NOT NULL,
-  pancard VARCHAR(100) UNIQUE NOT NULL,
-  addr text not null,
-  state VARCHAR(50) not null,
-  district VARCHAR(50) not null,
-  pincode INTEGER NOT NULL
+  company_name VARCHAR(100) NOT NULL,
+  pancard VARCHAR(50) UNIQUE NOT NULL,
+  district_id INTEGER UNIQUE NOT NULL,
+  state_id INTEGER UNIQUE NOT NULL,
+  pincode INTEGER NOT NULL,
+  addr TEXT NOT null
   );
 
+CREATE TABLE loc_state (
+  id SERIAL PRIMARY KEY,
+  state_name VARCHAR(50) NOT NULL
+)
+
+CREATE TABLE loc_district (
+  id SERIAL PRIMARY KEY,
+  district_name VARCHAR(50) NOT NULL
+)
 
 -- Create users table 
 
-CREATE TABLE users (
+CREATE TABLE user_listing (
   id SERIAL PRIMARY KEY ,
   email VARCHAR(100) UNIQUE NOT NULL,
   password VARCHAR(100) NOT NULL,
@@ -64,14 +74,15 @@ CREATE TABLE category_sub (
 
 CREATE TABLE product (
   id SERIAL PRIMARY KEY ,
-  title VARCHAR(255) NOT NULL,
+  title VARCHAR(100) NOT NULL,
   quantity INTEGER NOT NULL,
-  category INT NOT NULL,
-  sub_category INT NOT NULL,
+  category_id INT NOT NULL,
+  sub_category_id INT NOT NULL,
   descriptions text NOT NULL,
+  product_addr_id INTEGER NOT NULL,
   price decimal(5,2) NOT NULL,
   user_id INTEGER NOT NULL,
-  last_updated TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   is_deleted BOOLEAN DEFAULT FALSE
 );
 
@@ -94,39 +105,44 @@ CREATE TABLE product_log (
   superseded BOOLEAN DEFAULT FALSE
 );
 
-
 -- order payment related work
-
-CREATE TABLE order_payment (
-  id SERIAL PRIMARY KEY ,
-  total_amount decimal(10,2) not null,
-  transaction_id INTEGER NOT NULL,
-  transaction_status BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-
-);
-
 
 CREATE TABLE cart (
   id SERIAL PRIMARY KEY ,
   product_id INT NOT NULL,
   user_id INTEGER NOT NULL,
-  quantity INTEGER NOT NULL,
-  active BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  quantity INTEGER NOT NULL
 );
-
 
 CREATE TABLE order_listing (
   id SERIAL PRIMARY KEY ,
-  cart_id INTEGER UNIQUE NOT NULL,
-  addr TEXT NOT NULL,
-  total_price decimal(10,4) not null,
+  product_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  quantity INTEGER NOT NULL,
+  user_addr_id INTEGER DEFAULT NULL,
   payment_id INTEGER DEFAULT NULL,
-  processed BOOLEAN DEFAULT FALSE,
+  active BOOLEAN DEFAULT FALSE,
+  shipping BOOLEAN DEFAULT FALSE,
   completed BOOLEAN DEFAULT FALSE,
+  is_cancelled BOOLEAN DEFAULT FALSE,
+  returning_id INTEGER DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+  );
+
+CREATE TABLE order_payment (
+  id SERIAL PRIMARY KEY ,
+  order_id INTEGER NOT NULL,
+  amount DECIMAL(10,3) NOT NULL,
+  done_by INTEGER NOT NULL,
+  transaction_id VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+CREATE TABLE order_cancel (
+  id SERIAL PRIMARY KEY ,
+  order_id INTEGER NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
 
 -- order log
 
@@ -136,4 +152,15 @@ CREATE TABLE order_log (
   order_id INTEGER NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   superseded BOOLEAN DEFAULT FALSE
+);
+
+
+CREATE TABLE order_shipping_addr (
+  id SERIAL PRIMARY KEY ,
+  order_id INTEGER NOT NULL,
+  mobile VARCHAR(50) NOT NULL,
+  region VARCHAR(50) NOT NULL,
+  district VARCHAR(50) NOT NULL,
+  pincode VARCHAR(50) NOT NULL,
+  addr TEXT NOT NULL
 );

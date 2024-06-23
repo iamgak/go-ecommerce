@@ -52,3 +52,8 @@ func (v *Validator) ValidPassword(password string) {
 	}
 
 }
+
+func (v *Validator) ValidNumber(email string) bool {
+	emailPattern := regexp.MustCompile(`^[1-9][0-9]{8,}$`)
+	return emailPattern.MatchString(email)
+}

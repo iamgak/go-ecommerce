@@ -15,14 +15,25 @@ func (app *Application) NoRecordFound(err error) (bool, error) {
 
 func (app *Application) MyMiddlerware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user_id, authenticated := app.ValidUser(r)
-		if !authenticated {
-			http.Redirect(w, r, "/api/login/", http.StatusSeeOther)
+		app.Uid, app.Seller = app.ValidUser(r)
+		if app.Uid == 0 {
+			http.Redirect(w, r, "/api/user/login/", http.StatusSeeOther)
+			// http.NotFound(w,r)
 			return
 		}
-		app.Authenticated = authenticated
-		app.Uid = user_id
-		// app.seller = false
+
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (app *Application) authenticate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r)
+	})
+}
+
+func Adapt(handler http.Handler) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, r)
+	}
 }

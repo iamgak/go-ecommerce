@@ -4,12 +4,12 @@ import (
 	"crypto/sha1"
 	"database/sql"
 	"fmt"
+	"github.com/iamgak/go-ecommerce/validator"
+	"golang.org/x/crypto/bcrypt"
 	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
-
-	"github.com/iamgak/go-ecommerce/validator"
 )
 
 type User struct {
@@ -48,7 +48,12 @@ type UserModelInterface interface {
 
 func (u *UserDB) CreateUser(user *User, seller bool) error {
 	token := u.GenerateToken()
-	_, err := u.DB.Exec("INSERT INTO user_listing (email, password, activation_token,seller) VALUES($1,$2,$3,$4)", user.Email, user.Password, token, seller)
+	newHashedPassword, err := u.GeneratePassword(user.Password)
+	if err != nil {
+		return ErrCantUseGeneratePassword
+	}
+
+	_, err = u.DB.Exec("INSERT INTO user_listing (email, password, activation_token,seller) VALUES($1,$2,$3,$4)", user.Email, string(newHashedPassword), token, seller)
 	return err
 }
 
@@ -74,7 +79,11 @@ func (u *UserDB) ErrorCheck(user *User) map[string]string {
 
 func (u *UserDB) ValidCredentials(user *User) (int, error) {
 	var id int
-	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1 AND password = $2 AND active = TRUE", user.Email, user.Password).Scan(&id)
+	newHashedPassword, err := u.GeneratePassword(user.Password)
+	if err != nil {
+		return id, err
+	}
+	err = u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1 AND password = $2 AND active = TRUE", user.Email, string(newHashedPassword)).Scan(&id)
 	return id, err
 }
 
@@ -184,4 +193,14 @@ func (u *UserDB) PasswordURI(reset_token string) (int, error) {
 func (u *UserDB) NewPassword(user_id int, password string) error {
 	_, err := u.DB.Exec("UPDATE user_listing SET password = $1 WHERE id = $2", password, user_id)
 	return err
+}
+
+func (u *UserDB) GeneratePassword(newPassword string) ([]byte, error) {
+	newHashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	return newHashedPassword, err
+}
+
+func (u *UserDB) ActivityLog(activity string, uid int64) {
+	_, _ = u.DB.Exec("UPDATE `user_log` SET superseded = 1 WHERE activity = ? AND uid = ?", activity, uid)
+	_, _ = u.DB.Exec("INSERT INTO `user_log` SET  activity = ? , uid = ?, superseded = 0", activity, uid)
 }

@@ -27,7 +27,7 @@ CREATE TABLE loc_district (
 CREATE TABLE user_listing (
   id SERIAL PRIMARY KEY ,
   email VARCHAR(100) UNIQUE NOT NULL,
-  password VARCHAR(100) NOT NULL,
+  hashed_password VARCHAR(100) NOT NULL,
   seller boolean DEFAULT FALSE,
   last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   login_token VARCHAR(100) DEFAULT NULL,
@@ -79,10 +79,11 @@ CREATE TABLE product (
   category_id INT NOT NULL,
   sub_category_id INT NOT NULL,
   descriptions text NOT NULL,
-  product_addr_id INTEGER NOT NULL,
+  origin_addr_id INTEGER NOT NULL,
   price decimal(5,2) NOT NULL,
   user_id INTEGER NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  active_from DATE DEFAULT NULL,
   is_deleted BOOLEAN DEFAULT FALSE
 );
 
@@ -119,7 +120,7 @@ CREATE TABLE order_listing (
   product_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   quantity INTEGER NOT NULL,
-  user_addr_id INTEGER DEFAULT NULL,
+  shipping_addr_id INTEGER DEFAULT NULL,
   payment_id INTEGER DEFAULT NULL,
   active BOOLEAN DEFAULT FALSE,
   shipping BOOLEAN DEFAULT FALSE,
@@ -156,6 +157,17 @@ CREATE TABLE order_log (
 
 
 CREATE TABLE order_shipping_addr (
+  id SERIAL PRIMARY KEY ,
+  order_id INTEGER NOT NULL,
+  mobile VARCHAR(50) NOT NULL,
+  region VARCHAR(50) NOT NULL,
+  district VARCHAR(50) NOT NULL,
+  pincode VARCHAR(50) NOT NULL,
+  addr TEXT NOT NULL
+);
+
+
+CREATE TABLE product_origin_addr (
   id SERIAL PRIMARY KEY ,
   order_id INTEGER NOT NULL,
   mobile VARCHAR(50) NOT NULL,

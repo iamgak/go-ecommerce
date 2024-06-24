@@ -79,10 +79,10 @@ Sitemap generation
 - Backend Technologies:
 Go (Golang) for building the backend services
 RESTful APIs for client-server communication
-JWT for secure authentication
+<!-- JWT for secure authentication -->
 
 - Database:
-MySQL for storing data
+PostGres for storing data
 Redis for caching
 
 - Payment Gateway Integration:

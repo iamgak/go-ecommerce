@@ -22,6 +22,7 @@ type Object struct {
 	SubCategory int
 	Uid         int
 	Quantity    int
+	Addr_id     int
 	Price       float32
 	Description string
 }
@@ -31,7 +32,7 @@ type ObjectDB struct {
 }
 
 func (pr *ObjectDB) ListObject(obj *Object) error {
-	_, err := pr.DB.Exec("INSERT INTO product (title, quantity, category, sub_category, descriptions, price, user_id, last_updated) VALUES ($1,$2,$3,$4,$5,$6,$7,CURRENT_TIMESTAMP())", obj.Title, obj.Category, obj.SubCategory, obj.Description, obj.Uid, obj.Price, obj.Price)
+	_, err := pr.DB.Exec("INSERT INTO product (title, quantity, category_id, sub_category_id, descriptions, price, user_id, origin_addr_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)", obj.Title, obj.Category, obj.SubCategory, obj.Description, obj.Uid, obj.Price, obj.Price, obj.Addr_id)
 	if err != nil {
 		return err
 	}

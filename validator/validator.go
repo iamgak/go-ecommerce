@@ -57,3 +57,13 @@ func (v *Validator) ValidNumber(email string) bool {
 	emailPattern := regexp.MustCompile(`^[1-9][0-9]{8,}$`)
 	return emailPattern.MatchString(email)
 }
+
+func (v *Validator) NumberOnly(email string) bool {
+	emailPattern := regexp.MustCompile(`^[1-9][0-9]*$`)
+	return emailPattern.MatchString(email)
+}
+
+func (v *Validator) MatchString(pattern, input string) bool {
+	inputPattern := regexp.MustCompile(pattern)
+	return inputPattern.MatchString(input)
+}

@@ -8,21 +8,11 @@ import (
 
 func (app *Application) home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		app.NotFound(w)
 		return
 	}
 
 	fmt.Fprint(w, "Site is working")
-}
-
-func (app *Application) ValidUser(r *http.Request) (int, bool) {
-	cookie, err := r.Cookie("ldata")
-	if err != nil || cookie.Value == "" {
-		return 0, false
-	}
-
-	id, seller := app.User.ValidToken(cookie.Value)
-	return id, seller
 }
 
 /* to print message */
@@ -30,6 +20,18 @@ func (app *Application) Message(w http.ResponseWriter, statusCode int, key, valu
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	json.NewEncoder(w).Encode(map[string]string{key: value})
+}
+
+func (app *Application) ErrorMessage(w http.ResponseWriter, statusCode int, Message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(struct {
+		Status bool
+		Error  string
+	}{
+		Status: false,
+		Error:  Message,
+	})
 }
 
 func (app *Application) sendJSONResponse(w http.ResponseWriter, statusCode int, message any) {

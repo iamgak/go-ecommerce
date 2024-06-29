@@ -24,12 +24,13 @@ type Application struct {
 	Cart     models.CartModelInterface
 	Order    models.OrderModelInterface
 	User     models.UserModelInterface
-	Object   models.ProductModelInterface
+	Product  models.ProductModelInterface
 	Payment  models.PaymentModelInterface
-	Seller   bool
+	Seller   models.SellerModelInterface
 	Uid      int
+	// Logged   bool
 	// session         *sessions.CookieStore
-	// isAuthenticated bool
+	isAuthenticated bool
 }
 
 func main() {
@@ -66,10 +67,12 @@ func main() {
 		User:     &models.UserDB{DB: db},
 		Cart:     &models.CartDB{DB: db},
 		Order:    &models.OrderDB{DB: db},
-		Object:   &models.ObjectDB{DB: db},
+		Product:  &models.ProductDB{DB: db},
 		Payment:  &models.PaymentDB{DB: db},
+		Seller:   &models.SellerDB{DB: db},
 		// session:  store,
 	}
+
 	serve := &http.Server{
 		Addr:    *addr,
 		Handler: app.routes(),

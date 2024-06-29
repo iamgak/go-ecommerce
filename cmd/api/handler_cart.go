@@ -2,37 +2,28 @@ package main
 
 import (
 	"encoding/json"
+	models "github.com/iamgak/go-ecommerce/internals"
 	"net/http"
-	"strconv"
-
-	"github.com/iamgak/go-ecommerce/internals"
 )
 
 func (app *Application) CreateCart(w http.ResponseWriter, r *http.Request) {
 	var input *models.Cart
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		app.Message(w, 200, "Invalid", "Data Incorrect format")
+		app.CustomError(w, err, "Invalid JSON payload", http.StatusInternalServerError)
 		return
 	}
 
-	product_id, err := strconv.Atoi(r.URL.Query().Get("product_id"))
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	input.ProductId = product_id
 	validator := app.Cart.ErrorCheck(input)
 	if len(validator) != 0 {
 		app.sendJSONResponse(w, 200, validator)
 		return
 	}
 
-	input.Uid = 1
+	input.Uid = app.Uid
 	err = app.Cart.AddInCart(input)
 	if err != nil {
-		app.Message(w, 500, "Internal Error", "Internal Server Error")
+		app.CustomError(w, err, "Internal Server error", http.StatusInternalServerError)
 		return
 	}
 

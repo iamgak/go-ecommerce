@@ -2,21 +2,14 @@ package models
 
 import (
 	"database/sql"
-
 	"github.com/iamgak/go-ecommerce/validator"
 )
 
 type CartModelInterface interface {
 	AddInCart(*Cart) error
-	DeleteItem(int, int) error
+	RemoveFromCart(int, int) error
 	ErrorCheck(*Cart) map[string]string
 	ProductExist(int) bool
-}
-type Cart struct {
-	ProductId int
-	Uid       int
-	Quantity  int
-	Status    bool
 }
 
 type CartDB struct {
@@ -32,21 +25,18 @@ func (c *CartDB) AddInCart(cart *Cart) error {
 	return nil
 }
 
-func (c *CartDB) DeleteItem(Uid, CartId int) error {
-	_, err := c.DB.Exec("DELETE cart WHERE id = $1 AND user_id = $2", CartId, Uid)
-	if err != nil {
-		return ErrCantRemoveItem
-	}
-
-	return nil
+func (c *CartDB) RemoveFromCart(CartId, user_id int) error {
+	// inner join in update postgres
+	_, err := c.DB.Exec("UPDATE cart SET active = FALSE WHERE id = $1 AND user_id = $2", CartId, user_id)
+	return err
 }
 
 func (c *CartDB) ErrorCheck(cart *Cart) map[string]string {
 	validator := &validator.Validator{Errors: make(map[string]string)}
-	validator.CheckField(cart.Quantity > 0, "Quantity", "Quantity field Cannot be Empty")
-	validator.CheckField(cart.ProductId > 0, "ProductId", "ProductId field is Empty")
+	validator.CheckField(cart.Quantity > 0, "quantity", "quantity field Cannot be Empty")
+	validator.CheckField(cart.ProductId > 0, "product_id", "product_id field is Empty")
 	if len(validator.Errors) == 0 {
-		validator.CheckField(c.ProductExist(cart.ProductId), "Warning", "Invalid Request")
+		validator.CheckField(c.ProductExist(cart.ProductId), "Product_id", "Invalid Product_id")
 	}
 
 	return validator.Errors
@@ -54,6 +44,6 @@ func (c *CartDB) ErrorCheck(cart *Cart) map[string]string {
 
 func (c *CartDB) ProductExist(product_id int) bool {
 	var validId int
-	_ = c.DB.QueryRow("SELECT 1 FROM product WHERE id = $1 AND is_deleted = FALSE", product_id).Scan(&validId)
+	_ = c.DB.QueryRow("SELECT 1 FROM product WHERE id = $1 AND active = TRUE", product_id).Scan(&validId)
 	return validId > 0
 }

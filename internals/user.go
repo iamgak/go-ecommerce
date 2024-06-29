@@ -1,64 +1,62 @@
 package models
 
 import (
-	"crypto/sha1"
 	"database/sql"
-	"fmt"
+
 	"github.com/iamgak/go-ecommerce/validator"
-	"golang.org/x/crypto/bcrypt"
-	"math/rand"
-	"net/http"
-	"strconv"
-	"time"
 )
-
-type User struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type ForgetPassword struct {
-	Email string `json:"email"`
-}
-
-type NewPassword struct {
-	Password       string `json:"password"`
-	RepeatPassword string `json:"repeat_password"`
-}
 
 type UserDB struct {
 	DB *sql.DB
 }
 
 type UserModelInterface interface {
-	CreateUser(*User, bool) error
+	CreateAccount(*User) error
 	ResetPassword(string) error
-	PasswordURI(string) (int, error)
+	ResetPasswordURI(string) (int, error)
 	NewPassword(int, string) error
-	ValidToken(string) (int, bool)
-	UserLogin(*User) (string, error)
+	ValidToken(string) (int, error)
+	Login(*User) (string, error)
 	EmailExist(string) (bool, error)
-	UserLogout(string) error
-	ActivateUser(string) error
+	Logout(string) error
+	ActivateAccount(string) error
 	ErrorCheck(*User) map[string]string
 	ForgetPasswordErrorCheck(*ForgetPassword) map[string]string
 	NewPasswordErrorCheck(*NewPassword) map[string]string
-	GenerateToken() string
+	AddrErrorCheck(*UserAddr) map[string]string
+	ActivityLog(string, int) error
+	CreateAddr(*UserAddr, int) (int, error)
 }
 
-func (u *UserDB) CreateUser(user *User, seller bool) error {
-	token := u.GenerateToken()
-	newHashedPassword, err := u.GeneratePassword(user.Password)
+func (u *UserDB) CreateAccount(user *User) error {
+	token := GenerateToken()
+	newHashedPassword, err := GeneratePassword(user.Password)
 	if err != nil {
 		return ErrCantUseGeneratePassword
 	}
 
-	_, err = u.DB.Exec("INSERT INTO user_listing (email, password, activation_token,seller) VALUES($1,$2,$3,$4)", user.Email, string(newHashedPassword), token, seller)
+	var user_id int
+	err = u.DB.QueryRow("INSERT INTO user_listing (email, hashed_password, activation_token) VALUES($1,$2,$3) RETURNING id", user.Email, string(newHashedPassword), token).Scan(&user_id)
+	if err != nil {
+		return ErrCantAddUser
+	}
+
+	err = u.ActivityLog("User Registered", user_id)
 	return err
 }
 
-func (u *UserDB) ActivateUser(token string) error {
-	_, err := u.DB.Exec("UPDATE user_listing SET activation_token = NULL, active = TRUE WHERE activation_token = $1", token)
+func (u *UserDB) ActivateAccount(token string) error {
+	var user_id int
+	err := u.DB.QueryRow("UPDATE user_listing SET activation_token = NULL, active = TRUE WHERE activation_token = $1 RETURNING id", token).Scan(&user_id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNoRecord
+		}
+
+		return err
+	}
+
+	err = u.ActivityLog("User Activated", user_id)
 	return err
 }
 
@@ -79,35 +77,53 @@ func (u *UserDB) ErrorCheck(user *User) map[string]string {
 
 func (u *UserDB) ValidCredentials(user *User) (int, error) {
 	var id int
-	newHashedPassword, err := u.GeneratePassword(user.Password)
-	if err != nil {
-		return id, err
+	var password string
+	err := u.DB.QueryRow("SELECT id, hashed_password FROM user_listing WHERE email = $1 AND active = TRUE", user.Email).Scan(&id, &password)
+	if err != nil && err == sql.ErrNoRows {
+		return id, ErrNoRecord
 	}
-	err = u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1 AND password = $2 AND active = TRUE", user.Email, string(newHashedPassword)).Scan(&id)
+
+	valid, err := Matches([]byte(password), user.Password)
+	if !valid {
+		return 0, ErrNoRecord
+	}
+
 	return id, err
 }
 
-func (u *UserDB) UserLogin(user *User) (string, error) {
-	id, err := u.ValidCredentials(user)
+func (u *UserDB) Login(user *User) (string, error) {
+	user_id, err := u.ValidCredentials(user)
 	if err != nil {
 		return "", err
 	}
 
-	token := u.GenerateToken()
-	_, err = u.DB.Exec("UPDATE user_listing SET login_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2", token, id)
+	token := GenerateToken()
+	_, err = u.DB.Exec("UPDATE user_listing SET login_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2", token, user_id)
+	if err == nil {
+		_ = u.ActivityLog("User Login", user_id)
+	}
+
 	return token, err
 }
 
-func (u *UserDB) UserLogout(authHeader string) error {
-	_, err := u.DB.Exec("UPDATE user_listing SET login_token = NULL WHERE login_token = $1", authHeader)
+func (u *UserDB) Logout(token string) error {
+	var user_id int
+	err := u.DB.QueryRow("UPDATE user_listing SET login_token = NULL WHERE login_token = $1 RETURNING id", token).Scan(&user_id)
+	if err == nil {
+		_ = u.ActivityLog("User Logout", user_id)
+	}
+
 	return err
 }
 
-func (u *UserDB) ValidToken(token string) (int, bool) {
+func (u *UserDB) ValidToken(token string) (int, error) {
 	var id int
-	var seller bool
-	_ = u.DB.QueryRow("SELECT id, seller FROM user_listing WHERE login_token = $1", token).Scan(&id, &seller)
-	return id, seller
+	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE login_token = $1 AND active = TRUE", token).Scan(&id)
+	if err == sql.ErrNoRows {
+		return id, ErrNoRecord
+	}
+
+	return id, err
 }
 
 func (u *UserDB) EmailExist(email string) (bool, error) {
@@ -117,16 +133,25 @@ func (u *UserDB) EmailExist(email string) (bool, error) {
 }
 
 func (u *UserDB) ResetPassword(email string) error {
-	var id int
-	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1", email).Scan(&id)
-	if err != nil && err != sql.ErrNoRows {
+	var user_id int
+	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1", email).Scan(&user_id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNoRecord
+		}
+
 		return err
 	}
 
-	if id > 0 {
-		uri := u.GenerateToken()
-		_, _ = u.DB.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", id)
-		_, err = u.DB.Exec("INSERT INTO user_forget_passw (user_id,uri) VALUES ($1,$2)", id, uri)
+	uri := GenerateToken()
+	_, err = u.DB.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
+	if err != nil {
+		return err
+	}
+
+	_, err = u.DB.Exec("INSERT INTO user_forget_passw (user_id,uri) VALUES ($1,$2)", user_id, uri)
+	if err == nil {
+		err = u.ActivityLog("Reset Password Requested", user_id)
 	}
 
 	return err
@@ -140,33 +165,6 @@ func (u *UserDB) ForgetPasswordErrorCheck(user *ForgetPassword) map[string]strin
 	}
 
 	return validator.Errors
-}
-
-func (u *UserDB) CreateLoginToken(uid int, r *http.Request) string {
-	token := fmt.Sprintf("%s-%d %d", r.RemoteAddr, uid, time.Second)
-	return token
-}
-
-func (u *UserDB) GenerateToken() string {
-	// Get current epoch time (Unix timestamp in seconds)
-	epoch := time.Now().Unix()
-
-	// Generate a random number (for simplicity, let's use a random integer)
-	rand.Seed(time.Now().UnixNano())
-	randomNumber := rand.Intn(1000000) // Random number between 0 and 999999
-
-	// Concatenate epoch time and random number
-	tokenString := strconv.FormatInt(epoch, 10) + strconv.Itoa(randomNumber)
-
-	// Hash the concatenated string using SHA-1
-	hash := sha1.New()
-	hash.Write([]byte(tokenString))
-	hashed := hash.Sum(nil)
-
-	// Convert hashed bytes to a hexadecimal string
-	token := fmt.Sprintf("%x", hashed)
-
-	return token
 }
 
 func (u *UserDB) NewPasswordErrorCheck(user *NewPassword) map[string]string {
@@ -184,23 +182,56 @@ func (u *UserDB) NewPasswordErrorCheck(user *NewPassword) map[string]string {
 	return validator.Errors
 }
 
-func (u *UserDB) PasswordURI(reset_token string) (int, error) {
+func (u *UserDB) ResetPasswordURI(reset_token string) (int, error) {
 	var user_id int
 	err := u.DB.QueryRow("SELECT user_id FROM user_forget_passw WHERE uri = $1 AND superseded = FALSE", reset_token).Scan(&user_id)
+	if err != nil && err == sql.ErrNoRows {
+		return user_id, ErrNoRecord
+	}
+
 	return user_id, err
 }
 
 func (u *UserDB) NewPassword(user_id int, password string) error {
-	_, err := u.DB.Exec("UPDATE user_listing SET password = $1 WHERE id = $2", password, user_id)
+	_, err := u.DB.Exec("UPDATE user_listing SET hashed_password = $1 WHERE id = $2", password, user_id)
+	if err != nil {
+		return err
+	}
+
+	_, err = u.DB.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
+	if err != nil {
+		return err
+	}
+
+	err = u.ActivityLog("Password Reset", user_id)
 	return err
 }
 
-func (u *UserDB) GeneratePassword(newPassword string) ([]byte, error) {
-	newHashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
-	return newHashedPassword, err
+func (u *UserDB) ActivityLog(activity string, uid int) error {
+	_, err := u.DB.Exec("UPDATE user_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2", activity, uid)
+	if err != nil {
+		return err
+	}
+
+	_, err = u.DB.Exec("INSERT INTO user_log ( activity,user_id) VALUES ( $1, $2)", activity, uid)
+	return err
+}
+func (pr *UserDB) AddrErrorCheck(user_addr *UserAddr) map[string]string {
+	validator := &validator.Validator{Errors: make(map[string]string)}
+	validator.CheckField(validator.NotBlank(user_addr.Addr), "Addr", "Addr field Cannot be Empty")
+	validator.CheckField(validator.NotBlank(user_addr.Pincode), "Pincode", "Pincode field Cannot be Empty")
+	validator.CheckField(validator.NotBlank(user_addr.Mobile), "Mobile", "Mobile field Cannot be Empty")
+	validator.CheckField(user_addr.Region_id > 0, "Region_id", "Region_id field Cannot be Empty or zero")
+	validator.CheckField(user_addr.District_id > 0, "District_id", "District_id field Cannot be Empty Or 0")
+	if len(user_addr.Pincode) > 0 {
+		validator.CheckField(validator.MatchString("^[0-9]{5,8}$", user_addr.Pincode), "Pincode", "Pincode Should contain Numeric value only")
+	}
+
+	return validator.Errors
 }
 
-func (u *UserDB) ActivityLog(activity string, uid int64) {
-	_, _ = u.DB.Exec("UPDATE `user_log` SET superseded = 1 WHERE activity = ? AND uid = ?", activity, uid)
-	_, _ = u.DB.Exec("INSERT INTO `user_log` SET  activity = ? , uid = ?, superseded = 0", activity, uid)
+func (pr *UserDB) CreateAddr(addr *UserAddr, uid int) (int, error) {
+	var AddrId int
+	err := pr.DB.QueryRow("INSERT INTO user_addr (user_id, mobile, region_id, district_id, pincode, addr) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id ", uid, addr.Mobile, addr.Region_id, addr.District_id, addr.Pincode, addr.Addr).Scan(&AddrId)
+	return AddrId, err
 }

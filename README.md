@@ -130,6 +130,11 @@ Optimize queries and indexing for performance
 
 ## Route Listing
 - Home Page `https://localhost:4000/`
+- User Account Activation `localhost:4000/api/user/activation_token/?activation_token=39c5f3bc4a65f44e625a88791a8440c63301b7f6s` 
+- User Login `localhost:4000/api/user/login/`
+- User Logout `localhost:4000/api/user/logout/`
+- User Forget Password `localhost:4000/api/user/forget-password/`
+- User Reset password `localhost:4000/api/user/new-password/?reset_token=4b39a1bf5da5b490217aeec50c392c57a08f6b33`
 
 - User Page `https://localhost:4000/login/`, `https://localhost:4000/register/`, `https://localhost:4000/forget/password/`,`https://localhost:4000/user-info/`,`https://localhost:4000/update/user-info/`
 

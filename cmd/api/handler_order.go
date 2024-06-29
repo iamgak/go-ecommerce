@@ -2,96 +2,229 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
-	"github.com/iamgak/go-ecommerce/internals"
+	models "github.com/iamgak/go-ecommerce/internals"
 )
 
 func (app *Application) CancelOrder(w http.ResponseWriter, r *http.Request) {
-	uid := 1
 	order_id, err := strconv.Atoi(r.URL.Query().Get("order_id"))
 	if err != nil {
-		http.NotFound(w, r)
+		app.NotFound(w)
+		app.InfoLog.Print(err)
 		return
 	}
 
-	err = app.Order.CancelOrder(uid, order_id)
+	err, active := app.Order.OrderStatus(order_id, app.Uid)
 	if err != nil {
-		app.Message(w, 500, "Internal Error", "Internal Server Error")
+		app.ServerError(w, err)
 		return
 	}
 
-	app.Message(w, 200, "Message", "Order Cancelled")
+	if active {
+		err = app.Order.CancelOrder(app.Uid, order_id)
+		if err != nil {
+			app.ServerError(w, err)
+			return
+		}
+	}
+
+	// app.Message(w, 200, "Message", "Order Cancelled")
+	http.Redirect(w, r, fmt.Sprintf("/api/order/review/?order_id=%d", order_id), http.StatusPermanentRedirect)
 }
 
 func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
-	var input *models.Order
-	err := json.NewDecoder(r.Body).Decode(&input)
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		app.Message(w, 200, "Invalid", "Data Incorrect format")
+		app.CustomError(w, err, "Fail to load request body", http.StatusInternalServerError)
 		return
 	}
 
-	cartId, err := strconv.Atoi(r.URL.Query().Get("cartId"))
+	// Decode the first struct
+	requestData := &models.RequestData{}
+	err = json.Unmarshal(body, requestData)
 	if err != nil {
-		http.NotFound(w, r)
+		app.CustomError(w, err, "Invalid JSON payload", http.StatusInternalServerError)
 		return
 	}
 
-	input.CartId = cartId
+	// Decode the second struct
+	input := &models.UserAddr{}
+	err = json.Unmarshal(body, input)
+	if err != nil {
+		app.CustomError(w, err, "Invalid JSON payload", http.StatusInternalServerError)
+		return
+	}
 
-	validator := app.Order.ErrorCheck(input)
+	requestData.UserId = app.Uid
+	validator := app.Order.RequestErrorCheck(requestData)
 	if len(validator) != 0 {
 		app.sendJSONResponse(w, 200, validator)
 		return
 	}
 
-	err = app.Order.CreateOrder(input)
+	product_id, product_quantity, required_quantity, price, err := app.Order.ValidCart(requestData.CartID, app.Uid)
 	if err != nil {
-		app.Message(w, 500, "Internal Error", "Internal Server Error")
+		app.NotFound(w)
+		app.ErrorLog.Print(err)
 		return
 	}
 
-	app.Message(w, 200, "Message", "Product Added")
+	if product_id == 0 {
+		app.Message(w, 200, "product", "no product allocated")
+		return
+	}
+
+	if product_quantity == 0 {
+		app.Message(w, 200, "quantity", "Out of stock")
+		return
+	}
+
+	if product_quantity < required_quantity {
+		app.Message(w, 200, "quantity", "Please, select quantity less than current quantity")
+		return
+	}
+
+	validator = app.User.AddrErrorCheck(input)
+	if len(validator) != 0 {
+		app.sendJSONResponse(w, 200, validator)
+		return
+	}
+
+	Order := &models.OrderInfo{}
+	Order.AddrId, err = app.User.CreateAddr(input, app.Uid)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+
+	Order.PaymentMethod = requestData.PaymentMethod
+	Order.CartId = requestData.CartID
+	Order.ProductId = product_id
+	Order.Quantity = required_quantity
+	Order.Price = price
+	Order.UserId = app.Uid
+
+	order_id, err := app.Order.CreateOrder(Order)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+
+	if requestData.PaymentMethod == 1 {
+		err = app.Order.ActivateOrder(order_id)
+		if err != nil {
+			app.ServerError(w, err)
+			return
+		}
+
+		err = app.Cart.RemoveFromCart(order_id, app.Uid)
+		if err != nil {
+			app.ServerError(w, err)
+			return
+		}
+
+		// app.sendJSONResponse(w, 200, Order)
+		http.Redirect(w, r, fmt.Sprintf("/api/order/review/?order_id=%d", order_id), http.StatusPermanentRedirect)
+		return
+	}
+
+	app.Message(w, 200, "Message", "Now go to payment page")
 }
 
 func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
-	var input *models.Payment
-	err := json.NewDecoder(r.Body).Decode(&input)
+	order_id, err := strconv.Atoi(r.URL.Query().Get("order_id"))
 	if err != nil {
-		app.Message(w, 200, "Invalid", "Data Incorrect format")
+		app.NotFound(w)
+		app.InfoLog.Print(err)
 		return
 	}
 
-	cartId, err := strconv.Atoi(r.URL.Query().Get("cartId"))
+	err, active := app.Order.OrderStatus(order_id, app.Uid)
 	if err != nil {
-		http.NotFound(w, r)
+		app.ServerError(w, err)
 		return
 	}
 
-	input.CartId = cartId
-
-	validator := app.Payment.ErrorCheck(input)
-	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+	if active {
+		http.Redirect(w, r, fmt.Sprintf("/api/order/review/?order_id=%d", order_id), http.StatusPermanentRedirect)
 		return
 	}
 
-	// err = app.Order.CreateOrder(input)
-	// if err != nil {
-	// 	app.Message(w, 500, "Internal Error", "Internal Server Error")
-	// 	return
-	// }
+	quantity, price, err := app.Payment.ValidOrder(app.Uid, order_id)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
 
-	app.Message(w, 200, "Message", "Product Added")
+	err = app.Product.ProductQuantity(order_id, quantity)
+	if err != nil {
+		if err == models.ErrNoRecord {
+			app.Message(w, 200, "quantity", "Not enough quantity")
+			return
+		}
+		app.ServerError(w, err)
+		return
+	}
+
+	total_price := quantity * price
+	app.InfoLog.Print(total_price)
+	err = app.Order.ActivateOrder(order_id)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+
+	err = app.Cart.RemoveFromCart(order_id, app.Uid)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/api/order/review/?order_id=%d", order_id), http.StatusPermanentRedirect)
 }
 
 func (app *Application) OrderReview(w http.ResponseWriter, r *http.Request) {
 	order_id, err := strconv.Atoi(r.URL.Query().Get("order_id"))
 	if order_id == 0 || err != nil {
-		http.NotFound(w, r)
+		app.NotFound(w)
+		app.InfoLog.Print(err)
 		return
 	}
 
+	order_info, err := app.Order.OrderInfo(order_id, app.Uid)
+	if err != nil {
+		if err == models.ErrNoRecord {
+			app.NotFound(w)
+			app.ErrorLog.Print(err)
+			return
+		}
+
+		app.ServerError(w, err)
+		return
+	}
+
+	app.sendJSONResponse(w, 200, &order_info)
+	// a, b, c, d, active, err := app.Order.OrderInfo(order_id, app.Uid)
+
+}
+
+func (app *Application) UpdateOrderQuantity(w http.ResponseWriter, r *http.Request) {
+	order_id, err := strconv.Atoi(r.URL.Query().Get("order_id"))
+	quantity, err1 := strconv.Atoi(r.URL.Query().Get("quantity"))
+	if err1 != nil || err != nil || order_id == 0 {
+		app.NotFound(w)
+		app.InfoLog.Print(err)
+		return
+	}
+
+	err = app.Order.UpdateOrderQuantity(quantity, app.Uid, order_id)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+
+	app.Message(w, 200, "Message", "Quantity Updated")
 }

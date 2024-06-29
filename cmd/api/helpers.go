@@ -1,35 +1,81 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 	"runtime/debug"
 )
 
-func (app *Application) NoRecordFound(err error) (bool, error) {
-	if err != nil && err != sql.ErrNoRows {
-		return false, err
-	}
+type ErrResp struct {
+	Error any
+}
 
-	return true, nil
+type SuccessResp struct {
+	Status  bool
+	Success any
 }
 
 func (app *Application) MyMiddlerware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.Uid, app.Seller = app.ValidUser(r)
-		if app.Uid == 0 {
-			http.Redirect(w, r, "/api/user/login/", http.StatusSeeOther)
-			// http.NotFound(w,r)
+		user_id, err := app.ValidUser(r)
+		if err != nil {
+			app.ServerError(w, err)
 			return
 		}
 
+		if user_id > 0 {
+			app.isAuthenticated = true
+		}
+
+		if !app.isAuthenticated {
+			http.Redirect(w, r, "/api/user/login/", http.StatusSeeOther)
+			return
+		}
+
+		app.Uid = user_id
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (app *Application) authenticate(next http.Handler) http.Handler {
+func (app *Application) UserAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user_id, err := app.ValidUser(r)
+		if err != nil {
+			app.NotFound(w)
+			app.ErrorLog.Print(err)
+			return
+		}
+
+		if user_id <= 0 {
+			http.Redirect(w, r, "/api/user/login/", http.StatusSeeOther)
+			return
+		}
+
+		app.isAuthenticated = true
+		app.Uid = user_id
+		app.InfoLog.Printf("userId %d online", app.Uid)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (app *Application) SellerAuthentication(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, err := app.ValidSeller(r)
+		if err != nil {
+			app.InfoLog.Print(err)
+			app.NotFound(w)
+			return
+		}
+
+		if userID <= 0 {
+			http.Redirect(w, r, "/api/seller/login/", http.StatusSeeOther)
+			return
+		}
+
+		// Authentication successful
+		app.isAuthenticated = true
+		app.Uid = userID
+		app.InfoLog.Printf("sellerId %d online", app.Uid)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -43,7 +89,7 @@ func Adapt(handler http.Handler) func(http.ResponseWriter, *http.Request) {
 func (app *Application) ServerError(w http.ResponseWriter, err error) {
 	trace := fmt.Sprintf("%s\n%s", err.Error(), debug.Stack())
 	app.ErrorLog.Output(2, trace)
-	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	app.ErrorMessage(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 }
 
 // The clientError helper sends a specific status code and corresponding description
@@ -60,6 +106,7 @@ func (app *Application) NotFound(w http.ResponseWriter) {
 	app.ClientError(w, http.StatusNotFound)
 }
 
-func (app *Application) CustomError(w http.ResponseWriter, message string, status int) {
-	http.Error(w, message, status)
+func (app *Application) CustomError(w http.ResponseWriter, err error, message string, status int) {
+	app.ErrorMessage(w, status, message)
+	app.ErrorLog.Print(err)
 }

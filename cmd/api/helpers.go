@@ -4,26 +4,19 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+
+	models "github.com/iamgak/go-ecommerce/internals"
 )
-
-type ErrResp struct {
-	Error any
-}
-
-type SuccessResp struct {
-	Status  bool
-	Success any
-}
 
 func (app *Application) MyMiddlerware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user_id, err := app.ValidUser(r)
+		userID, err := app.ValidUser(r)
 		if err != nil {
 			app.ServerError(w, err)
 			return
 		}
 
-		if user_id > 0 {
+		if userID > 0 {
 			app.isAuthenticated = true
 		}
 
@@ -32,27 +25,28 @@ func (app *Application) MyMiddlerware(next http.Handler) http.Handler {
 			return
 		}
 
-		app.Uid = user_id
+		app.Uid = userID
 		next.ServeHTTP(w, r)
 	})
 }
 
 func (app *Application) UserAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user_id, err := app.ValidUser(r)
-		if err != nil {
-			app.NotFound(w)
-			app.ErrorLog.Print(err)
+		userID, err := app.ValidUser(r)
+		if err != nil && err != models.ErrNoCookieFound {
+			app.ServerError(w, err)
 			return
 		}
 
-		if user_id <= 0 {
-			http.Redirect(w, r, "/api/user/login/", http.StatusSeeOther)
+		if userID <= 0 {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			message := "invalid or missing authentication token"
+			app.ErrorMessage(w, http.StatusUnauthorized, message)
 			return
 		}
 
 		app.isAuthenticated = true
-		app.Uid = user_id
+		app.Uid = userID
 		app.InfoLog.Printf("userId %d online", app.Uid)
 		next.ServeHTTP(w, r)
 	})
@@ -61,14 +55,15 @@ func (app *Application) UserAuthentication(next http.Handler) http.Handler {
 func (app *Application) SellerAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID, err := app.ValidSeller(r)
-		if err != nil {
-			app.InfoLog.Print(err)
-			app.NotFound(w)
+		if err != nil && err != models.ErrNoCookieFound {
+			app.ServerError(w, err)
 			return
 		}
 
 		if userID <= 0 {
-			http.Redirect(w, r, "/api/seller/login/", http.StatusSeeOther)
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			message := "invalid or missing authentication token"
+			app.ErrorMessage(w, http.StatusUnauthorized, message)
 			return
 		}
 
@@ -80,28 +75,16 @@ func (app *Application) SellerAuthentication(next http.Handler) http.Handler {
 	})
 }
 
-func Adapt(handler http.Handler) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		handler.ServeHTTP(w, r)
-	}
-}
-
 func (app *Application) ServerError(w http.ResponseWriter, err error) {
+	app.ErrorMessage(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 	trace := fmt.Sprintf("%s\n%s", err.Error(), debug.Stack())
 	app.ErrorLog.Output(2, trace)
-	app.ErrorMessage(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 }
 
-// The clientError helper sends a specific status code and corresponding description
-// to the user. We'll use this later in the book to send responses like 400 "Bad
-// Request" when there's a problem with the request that the user sent.
 func (app *Application) ClientError(w http.ResponseWriter, status int) {
 	http.Error(w, http.StatusText(status), status)
 }
 
-// For consistency, we'll also implement a notFound helper. This is simply a
-// convenience wrapper around clientError which sends a 404 Not Found response to
-// the user.
 func (app *Application) NotFound(w http.ResponseWriter) {
 	app.ClientError(w, http.StatusNotFound)
 }

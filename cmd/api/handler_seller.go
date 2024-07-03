@@ -4,24 +4,22 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	models "github.com/iamgak/go-ecommerce/internals"
 	"net/http"
 	"time"
-
-	models "github.com/iamgak/go-ecommerce/internals"
 )
 
 func (app *Application) SellerRegister(w http.ResponseWriter, r *http.Request) {
 	var input *models.Seller
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.ErrorMessage(w, http.StatusInternalServerError, "Invalid JSON Payload")
 		return
 	}
 
 	validator := app.Seller.ErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
@@ -32,7 +30,7 @@ func (app *Application) SellerRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if Valid {
-		app.Message(w, 200, "Email", "Email already Exist")
+		app.ErrorMessage(w, 200, "Email already Exist")
 		return
 	}
 
@@ -42,28 +40,27 @@ func (app *Application) SellerRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.sendJSONResponse(w, 200, input)
+	app.FinalMessage(w, 200, input)
 }
 
 func (app *Application) SellerLogin(w http.ResponseWriter, r *http.Request) {
 	var input *models.User
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.ErrorMessage(w, http.StatusInternalServerError, "Invalid JSON Payload")
 		return
 	}
 
 	validator := app.User.ErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
 	token, err := app.Seller.Login(input)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			app.Message(w, 200, "Invalid", "Incorrect Credentails")
+			app.ErrorMessage(w, http.StatusNotFound, "Incorrect Credentials")
 			return
 		}
 
@@ -79,8 +76,7 @@ func (app *Application) SellerLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, cookie)
-	message := SuccessResp{Success: "Login Successfull"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusAccepted, "Login Succesfull")
 }
 
 func (app *Application) SellerActivationToken(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +91,7 @@ func (app *Application) SellerActivationToken(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		if err == models.ErrNoRecord {
 			app.NotFound(w)
+			app.ErrorLog.Print(err)
 			return
 		}
 
@@ -102,7 +99,7 @@ func (app *Application) SellerActivationToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	app.Message(w, 200, "Message", "Your Account has been Verified")
+	app.FinalMessage(w, http.StatusAccepted, "Your Account has been Verified")
 }
 
 func (app *Application) SellerForgetPassword(w http.ResponseWriter, r *http.Request) {
@@ -110,15 +107,14 @@ func (app *Application) SellerForgetPassword(w http.ResponseWriter, r *http.Requ
 	err := json.NewDecoder(r.Body).Decode(&input)
 
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.CustomError(w, err, "Invalid JSON Payload", http.StatusInternalServerError)
 		return
 	}
 
 	validator := app.User.ForgetPasswordErrorCheck(input)
 
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -128,7 +124,7 @@ func (app *Application) SellerForgetPassword(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	app.Message(w, 200, "Message", "If your Email is registered you will get mail on given email account")
+	app.FinalMessage(w, http.StatusAccepted, "If your Email is registered you will get mail on given email account")
 }
 
 func (app *Application) SellerNewPassword(w http.ResponseWriter, r *http.Request) {
@@ -149,14 +145,13 @@ func (app *Application) SellerNewPassword(w http.ResponseWriter, r *http.Request
 	var input *models.NewPassword
 	err = json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.ErrorMessage(w, http.StatusInternalServerError, "Invalid JSON Payload")
 		return
 	}
 
 	validator := app.User.NewPasswordErrorCheck(input)
 	if len(validator) > 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
@@ -166,7 +161,7 @@ func (app *Application) SellerNewPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	app.sendJSONResponse(w, 200, "Password Reset Successfully")
+	app.FinalMessage(w, 200, "Password Reset Successfully")
 }
 
 func (app *Application) SellerLogout(w http.ResponseWriter, r *http.Request) {
@@ -192,8 +187,9 @@ func (app *Application) SellerLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.Message(w, 500, "Message", "Logout Successfully")
+	app.FinalMessage(w, 500, "Logout Successfully")
 }
+
 func (app *Application) ValidSeller(r *http.Request) (int, error) {
 	cookie, err := r.Cookie("sldata")
 	if err != nil || cookie.Value == "" {
@@ -210,9 +206,7 @@ func (app *Application) ValidSeller(r *http.Request) (int, error) {
 		if errors.Is(err, models.ErrNoRecord) {
 			return id, models.ErrNoRecord
 		}
-
-		return 0, err
 	}
 
-	return id, nil
+	return id, err
 }

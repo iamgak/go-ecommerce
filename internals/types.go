@@ -93,3 +93,20 @@ type RequestData struct {
 	AddrId        int `json:"addr_id"`
 	UserId        int `json:"user_id"`
 }
+
+type Listing struct {
+	Title            string  `json:"title"`
+	Category         int     `json:"category"`
+	Quantity         int     `json:"quantity"`
+	SelectedQuantity int     `json:"selectedquantity"`
+	Price            float32 `json:"price"`
+	Available        bool    `json:"available"`
+}
+
+type ProductListing struct {
+	Title     string  `json:"title"`
+	Category  string  `json:"category"`
+	Quantity  string  `json:"quantity"`
+	Price     float32 `json:"price"`
+	Available bool    `json:"available"`
+}

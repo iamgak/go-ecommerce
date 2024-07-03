@@ -11,13 +11,75 @@ type OrderModelInterface interface {
 	CancelOrder(int, int) error
 	UpdateOrderQuantity(int, int, int) error
 	ValidCart(int, int) (int, int, int, float32, error)
-	OrderInfo(int, int) (*OrderReview, error)
+	OrderInfo(int, int) ([]*OrderReview, error)
+	OrderListing(int) ([]*OrderReview, error)
 	ActivateOrder(int) error
 	OrderStatus(int, int) (error, bool)
 }
 
 type OrderDB struct {
 	DB *sql.DB
+}
+
+func (c *OrderDB) OrderListing(user_id int) ([]*OrderReview, error) {
+	query := `SELECT type_payment.name, order_listing.is_cancelled, 
+				order_listing.price, order_listing.active, order_listing.dispatch,
+				product.title, order_listing.created_at
+				FROM order_listing
+				INNER JOIN product ON product.id = order_listing.product_id
+				INNER JOIN type_payment ON type_payment.id = order_listing.payment_method
+				WHERE order_listing.user_id = $1`
+
+	cart_listing, err := c.Listing(query)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+	}
+
+	return cart_listing, err
+}
+
+func (m *OrderDB) Listing(stmt string) ([]*OrderReview, error) {
+	rows, err := m.DB.Query(stmt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		} else {
+			return nil, err
+		}
+	}
+
+	defer rows.Close()
+
+	arr := []*OrderReview{}
+	for rows.Next() {
+		bk, err := m.ScanData(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		arr = append(arr, bk)
+	}
+
+	return arr, err
+}
+
+func (m *OrderDB) ScanData(rows *sql.Rows) (*OrderReview, error) {
+	info := &OrderReview{}
+	// arg := []interface{}{}
+	arg := []interface{}{
+		&info.PaymentType,
+		&info.Cancelled,
+		&info.ProductPrice,
+		&info.Active,
+		&info.Dispatched,
+		&info.ProductName,
+		&info.OrderAt,
+	}
+
+	err := rows.Scan(arg...)
+	return info, err
 }
 
 func (pr *OrderDB) CreateOrder(order *OrderInfo) (int, error) {
@@ -49,7 +111,13 @@ func (pr *OrderDB) ValidCart(cartId, user_id int) (int, int, int, float32, error
 				INNER JOIN cart ON cart.product_id = product.id 
 				WHERE cart.user_id = $1 AND cart.id = $2 AND product.active = TRUE`
 
-	err := pr.DB.QueryRow(query, user_id, cartId).Scan(&product_id, &product_quantity, &cart_quantity, &price)
+	arg := []interface{}{
+		&product_id,
+		&product_quantity,
+		&cart_quantity,
+		&price,
+	}
+	err := pr.DB.QueryRow(query, user_id, cartId).Scan(arg...)
 	if err != nil && err == sql.ErrNoRows {
 		return product_id, product_quantity, cart_quantity, price, ErrNoRecord
 	}
@@ -57,8 +125,7 @@ func (pr *OrderDB) ValidCart(cartId, user_id int) (int, int, int, float32, error
 	return product_id, product_quantity, cart_quantity, price, err
 }
 
-func (c *OrderDB) OrderInfo(orderId, user_id int) (*OrderReview, error) {
-	order_info := &OrderReview{}
+func (c *OrderDB) OrderInfo(orderId, user_id int) ([]*OrderReview, error) {
 	query := `SELECT type_payment.name, order_listing.is_cancelled, 
 				order_listing.price, order_listing.active, order_listing.dispatch,
 				product.title, order_listing.created_at
@@ -66,9 +133,9 @@ func (c *OrderDB) OrderInfo(orderId, user_id int) (*OrderReview, error) {
 				INNER JOIN product ON product.id = order_listing.product_id
 				INNER JOIN type_payment ON type_payment.id = order_listing.payment_method
 				WHERE order_listing.user_id = $1 AND order_listing.id = $2`
-	err := c.DB.QueryRow(query, user_id, orderId).Scan(&order_info.PaymentType, &order_info.Cancelled, &order_info.ProductPrice, &order_info.Active, &order_info.Dispatched, &order_info.ProductName, &order_info.OrderAt)
+	order_info, err := c.Listing(query)
 	if err != nil && err == sql.ErrNoRows {
-		return order_info, ErrNoRecord
+		return nil, ErrNoRecord
 	}
 
 	return order_info, err

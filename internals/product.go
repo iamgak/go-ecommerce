@@ -2,8 +2,9 @@ package models
 
 import (
 	"database/sql"
-	"github.com/iamgak/go-ecommerce/validator"
 	"regexp"
+
+	"github.com/iamgak/go-ecommerce/validator"
 )
 
 type ProductModelInterface interface {
@@ -17,7 +18,8 @@ type ProductModelInterface interface {
 	ProductErrorCheck(*Product) map[string]string
 	ProductAddrErrorCheck(*Product_Addr) map[string]string
 	UpdateProductQuantity(int, int, int) error
-	// ListProductWithParams(int) error
+	ProductListing() ([]*ProductListing, error)
+
 	// ListProduct() error
 }
 
@@ -25,24 +27,62 @@ type ProductDB struct {
 	DB *sql.DB
 }
 
-func (pr *ProductDB) ListProductWithParams(product_id int) error {
-	var validId int
-	err := pr.DB.QueryRow("SELECT 1 FROM product WHERE id = $1 AND uid = $3", product_id).Scan(&validId)
-	if err == sql.ErrNoRows {
-		return ErrNoRecord
+func (c *ProductDB) ProductListing() ([]*ProductListing, error) {
+	query := `SELECT pt.title, ct.category, pt.quantity, 
+				pt.price, pt.active 
+				FROM product pt
+				INNER JOIN category_main ct ON pt.category_id = ct.id
+				WHERE pt.active = TRUE`
+
+	cart_listing, err := c.Listing(query)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		} else {
+			return nil, err
+		}
 	}
 
-	return err
+	return cart_listing, nil
 }
 
-func (pr *ProductDB) ListProduct() error {
-	var validId int
-	err := pr.DB.QueryRow("SELECT 1 FROM product WHERE id = $1 AND uid = $3").Scan(&validId)
-	if err == sql.ErrNoRows {
-		return ErrNoRecord
+func (m *ProductDB) Listing(stmt string) ([]*ProductListing, error) {
+	rows, err := m.DB.Query(stmt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		} else {
+			return nil, err
+		}
 	}
 
-	return err
+	defer rows.Close()
+
+	Books := []*ProductListing{}
+	for rows.Next() {
+		bk, err := m.ScanData(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		Books = append(Books, bk)
+	}
+
+	return Books, err
+}
+
+func (m *ProductDB) ScanData(rows *sql.Rows) (*ProductListing, error) {
+	listing := new(ProductListing)
+	arg := []interface{}{
+		&listing.Title,
+		&listing.Category,
+		&listing.Quantity,
+		&listing.Price,
+		&listing.Available,
+	}
+
+	err := rows.Scan(arg...)
+	return listing, err
 }
 
 func (pr *ProductDB) DeleteProduct(user_id, product_id int) error {

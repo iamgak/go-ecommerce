@@ -11,3 +11,5 @@ require (
 	github.com/justinas/alice v1.2.0
 	golang.org/x/crypto v0.24.0
 )
+
+require golang.org/x/time v0.5.0

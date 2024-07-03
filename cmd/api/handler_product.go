@@ -11,7 +11,7 @@ import (
 func (app *Application) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	product_id, err := strconv.Atoi(r.URL.Query().Get("product_id"))
 	if err != nil {
-		http.NotFound(w, r)
+		app.NotFound(w)
 		app.InfoLog.Print(err)
 		return
 	}
@@ -19,14 +19,13 @@ func (app *Application) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	var input *models.Product
 	err = json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.CustomError(w, err, "Invalid JSON Payload", http.StatusInternalServerError)
 		return
 	}
 
 	validator := app.Product.ProductErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -37,21 +36,20 @@ func (app *Application) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.Message(w, 200, "Message", "Product Updated")
+	app.FinalMessage(w, http.StatusAccepted, "Product Updated")
 }
 
 func (app *Application) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	var input *models.Product
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.CustomError(w, err, "Invalid Json Payload", http.StatusInternalServerError)
 		return
 	}
 
 	validator := app.Product.ProductErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -62,7 +60,7 @@ func (app *Application) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.Message(w, 200, "Message", "Product Added")
+	app.FinalMessage(w, http.StatusAccepted, "Product Added")
 }
 
 func (app *Application) CreateProductAddr(w http.ResponseWriter, r *http.Request) {
@@ -83,14 +81,13 @@ func (app *Application) CreateProductAddr(w http.ResponseWriter, r *http.Request
 	var input *models.Product_Addr
 	err = json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.CustomError(w, err, "Invalid JSON Payload", http.StatusInternalServerError)
 		return
 	}
 
 	validator := app.Product.ProductAddrErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -101,7 +98,7 @@ func (app *Application) CreateProductAddr(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	app.Message(w, 200, "Message", "Address Added to Product")
+	app.FinalMessage(w, http.StatusAccepted, "Seller Address Added")
 }
 
 func (app *Application) DeleteProduct(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +115,7 @@ func (app *Application) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.Message(w, 200, "Message", "Product Deleted")
+	app.FinalMessage(w, http.StatusAccepted, "Product Deleted")
 }
 
 func (app *Application) UpdateProductQuantity(w http.ResponseWriter, r *http.Request) {
@@ -140,5 +137,15 @@ func (app *Application) UpdateProductQuantity(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	app.Message(w, 200, "message", "Product Quantity updated")
+	app.FinalMessage(w, http.StatusAccepted, "Product Quantity Updated")
+}
+
+func (app *Application) ProductListing(w http.ResponseWriter, r *http.Request) {
+	data, err := app.Product.ProductListing()
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+
+	app.FinalMessage(w, http.StatusAccepted, data)
 }

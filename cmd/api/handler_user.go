@@ -14,22 +14,20 @@ func (app *Application) UserLogin(w http.ResponseWriter, r *http.Request) {
 	var input *models.User
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.CustomError(w, err, "Fail to Load Body", http.StatusInternalServerError)
 		return
 	}
 
 	validator := app.User.ErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
 	token, err := app.User.Login(input)
 	if err != nil {
 		if err == models.ErrNoRecord {
-			message := ErrResp{Error: "Incorrect Credentials"}
-			app.sendJSONResponse(w, 200, message)
+			app.FinalMessage(w, http.StatusAccepted, "Incorrect Credentials")
 			return
 		}
 
@@ -46,22 +44,20 @@ func (app *Application) UserLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, cookie)
-	message := SuccessResp{Success: "Login Successfull"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusAccepted, "Login Successfully")
 }
 
 func (app *Application) UserRegister(w http.ResponseWriter, r *http.Request) {
 	var input *models.User
 	err := json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.ErrorMessage(w, http.StatusInternalServerError, "Invalid JSON Payload")
 		return
 	}
 
 	validator := app.User.ErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
@@ -72,7 +68,7 @@ func (app *Application) UserRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if inValid {
-		app.Message(w, 200, "Email", "Email already Exist")
+		app.ErrorMessage(w, 200, "Email already Exist")
 		return
 	}
 
@@ -82,8 +78,7 @@ func (app *Application) UserRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message := SuccessResp{Success: "Account Registered"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusAccepted, "Account Registered")
 }
 
 func (app *Application) UserActivationToken(w http.ResponseWriter, r *http.Request) {
@@ -105,8 +100,7 @@ func (app *Application) UserActivationToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	message := SuccessResp{Success: "Account Verified"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusAccepted, "Account Verified")
 }
 
 func (app *Application) UserForgetPassword(w http.ResponseWriter, r *http.Request) {
@@ -114,15 +108,14 @@ func (app *Application) UserForgetPassword(w http.ResponseWriter, r *http.Reques
 	err := json.NewDecoder(r.Body).Decode(&input)
 
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.ErrorMessage(w, http.StatusInternalServerError, "Invalid JSON Payload")
 		return
 	}
 
 	validator := app.User.ForgetPasswordErrorCheck(input)
 
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -132,8 +125,7 @@ func (app *Application) UserForgetPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	message := SuccessResp{Success: "If Your Email's registered you will get link to reset password"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusFound, "If Your Email's registered you will get link to reset password")
 }
 
 func (app *Application) NewPassword(w http.ResponseWriter, r *http.Request) {
@@ -154,14 +146,13 @@ func (app *Application) NewPassword(w http.ResponseWriter, r *http.Request) {
 	var input *models.NewPassword
 	err = json.NewDecoder(r.Body).Decode(&input)
 	if err != nil {
-		message := ErrResp{Error: "Incorrect Format Data"}
-		app.sendJSONResponse(w, 200, message)
+		app.ErrorMessage(w, http.StatusInternalServerError, "Invalid JSON Payload")
 		return
 	}
 
 	validator := app.User.NewPasswordErrorCheck(input)
 	if len(validator) > 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -171,8 +162,7 @@ func (app *Application) NewPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message := SuccessResp{Success: "Password Reset Successfully"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusAccepted, "Password Reset Successfully")
 }
 
 func (app *Application) UserLogout(w http.ResponseWriter, r *http.Request) {
@@ -198,8 +188,7 @@ func (app *Application) UserLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message := SuccessResp{Success: "Logout Successfully"}
-	app.sendJSONResponse(w, 200, message)
+	app.FinalMessage(w, http.StatusAccepted, "Logout Successfully")
 }
 
 func (app *Application) ValidUser(r *http.Request) (int, error) {

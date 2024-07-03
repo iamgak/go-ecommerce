@@ -1,6 +1,7 @@
 package main
 
 import (
+	"expvar"
 	"net/http"
 
 	"github.com/justinas/alice"
@@ -8,9 +9,11 @@ import (
 
 func (app *Application) routes() http.Handler {
 	mux := http.NewServeMux()
+
 	//home page
 	mux.HandleFunc("/", app.home)
-	// customer/user
+
+	// customer
 	mux.HandleFunc("/api/user/register/", app.UserRegister)
 	mux.HandleFunc("/api/user/login/", app.UserLogin)
 	mux.HandleFunc("/api/user/activate_account/", app.UserActivationToken)
@@ -36,16 +39,19 @@ func (app *Application) routes() http.Handler {
 	customer := alice.New(app.UserAuthentication)
 
 	mux.Handle("/api/add/cart/", customer.ThenFunc(app.CreateCart))
+	mux.Handle("/api/cart/delete/", customer.ThenFunc(app.RemoveFromCart))
+	mux.Handle("/api/cart/listing/", customer.ThenFunc(app.CartListing))
 	mux.Handle("/api/add/order/", customer.ThenFunc(app.CreateOrder))
+
+	mux.Handle("/api/order/listing/", customer.ThenFunc(app.OrderListing))
 	mux.Handle("/api/order/payment/", customer.ThenFunc(app.MakePayment))
 	mux.Handle("/api/order/review/", customer.ThenFunc(app.OrderReview))
 	mux.Handle("/api/order/cancel/", customer.ThenFunc(app.CancelOrder))
 
-	mux.HandleFunc("/api/listing/", app.home)
-	mux.HandleFunc("/api/product/view/", app.home)
-	// mux.HandleFunc("/api/listing/", app.home)
+	mux.HandleFunc("/api/product/listing/", app.ProductListing)
+	mux.Handle("/api/dbg/", expvar.Handler())
 
-	standard := alice.New(app.logRequest, secureHeaders)
+	standard := alice.New(app.rateLimit, secureHeaders, app.recoverPanic)
 	return standard.Then(mux)
 
 }

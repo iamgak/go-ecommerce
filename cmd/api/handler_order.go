@@ -10,6 +10,16 @@ import (
 	models "github.com/iamgak/go-ecommerce/internals"
 )
 
+func (app *Application) OrderListing(w http.ResponseWriter, r *http.Request) {
+	order_listing, err := app.Order.OrderListing(app.Uid)
+	if err != nil {
+		app.ServerError(w, err)
+		return
+	}
+
+	app.FinalMessage(w, http.StatusAccepted, order_listing)
+}
+
 func (app *Application) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	order_id, err := strconv.Atoi(r.URL.Query().Get("order_id"))
 	if err != nil {
@@ -62,7 +72,7 @@ func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	requestData.UserId = app.Uid
 	validator := app.Order.RequestErrorCheck(requestData)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -73,24 +83,19 @@ func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if product_id == 0 {
-		app.Message(w, 200, "product", "no product allocated")
-		return
-	}
-
 	if product_quantity == 0 {
-		app.Message(w, 200, "quantity", "Out of stock")
+		app.ErrorMessage(w, 400, "Out of stock")
 		return
 	}
 
 	if product_quantity < required_quantity {
-		app.Message(w, 200, "quantity", "Please, select quantity less than current quantity")
+		app.ErrorMessage(w, 400, "Please, Select less quantity")
 		return
 	}
 
 	validator = app.User.AddrErrorCheck(input)
 	if len(validator) != 0 {
-		app.sendJSONResponse(w, 200, validator)
+		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
@@ -132,7 +137,7 @@ func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.Message(w, 200, "Message", "Now go to payment page")
+	app.FinalMessage(w, http.StatusAccepted, "Now go to Payment page")
 }
 
 func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
@@ -163,9 +168,10 @@ func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
 	err = app.Product.ProductQuantity(order_id, quantity)
 	if err != nil {
 		if err == models.ErrNoRecord {
-			app.Message(w, 200, "quantity", "Not enough quantity")
+			app.ErrorMessage(w, 200, "Not enough quantity")
 			return
 		}
+
 		app.ServerError(w, err)
 		return
 	}
@@ -183,6 +189,7 @@ func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
 		app.ServerError(w, err)
 		return
 	}
+
 	http.Redirect(w, r, fmt.Sprintf("/api/order/review/?order_id=%d", order_id), http.StatusPermanentRedirect)
 }
 
@@ -206,9 +213,7 @@ func (app *Application) OrderReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app.sendJSONResponse(w, 200, &order_info)
-	// a, b, c, d, active, err := app.Order.OrderInfo(order_id, app.Uid)
-
+	app.FinalMessage(w, http.StatusFound, &order_info)
 }
 
 func (app *Application) UpdateOrderQuantity(w http.ResponseWriter, r *http.Request) {
@@ -226,5 +231,5 @@ func (app *Application) UpdateOrderQuantity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	app.Message(w, 200, "Message", "Quantity Updated")
+	app.FinalMessage(w, http.StatusAccepted, "Quantity Updated")
 }

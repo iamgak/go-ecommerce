@@ -1,8 +1,7 @@
-package models
+package data
 
 import (
 	"database/sql"
-
 	"github.com/iamgak/go-ecommerce/validator"
 )
 

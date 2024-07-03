@@ -11,7 +11,7 @@ import (
 )
 
 func (app *Application) OrderListing(w http.ResponseWriter, r *http.Request) {
-	order_listing, err := app.Order.OrderListing(app.Uid)
+	order_listing, err := app.Model.Orders.OrderListing(app.Uid)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -28,14 +28,14 @@ func (app *Application) CancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err, active := app.Order.OrderStatus(order_id, app.Uid)
+	err, active := app.Model.Orders.OrderStatus(order_id, app.Uid)
 	if err != nil {
 		app.ServerError(w, err)
 		return
 	}
 
 	if active {
-		err = app.Order.CancelOrder(app.Uid, order_id)
+		err = app.Model.Orders.CancelOrder(app.Uid, order_id)
 		if err != nil {
 			app.ServerError(w, err)
 			return
@@ -70,13 +70,13 @@ func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestData.UserId = app.Uid
-	validator := app.Order.RequestErrorCheck(requestData)
+	validator := app.Model.Orders.RequestErrorCheck(requestData)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
-	product_id, product_quantity, required_quantity, price, err := app.Order.ValidCart(requestData.CartID, app.Uid)
+	product_id, product_quantity, required_quantity, price, err := app.Model.Orders.ValidCart(requestData.CartID, app.Uid)
 	if err != nil {
 		app.NotFound(w)
 		app.ErrorLog.Print(err)
@@ -93,14 +93,14 @@ func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator = app.User.AddrErrorCheck(input)
+	validator = app.Model.Users.AddrErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
 	Order := &models.OrderInfo{}
-	Order.AddrId, err = app.User.CreateAddr(input, app.Uid)
+	Order.AddrId, err = app.Model.Users.CreateAddr(input, app.Uid)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -113,20 +113,20 @@ func (app *Application) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	Order.Price = price
 	Order.UserId = app.Uid
 
-	order_id, err := app.Order.CreateOrder(Order)
+	order_id, err := app.Model.Orders.CreateOrder(Order)
 	if err != nil {
 		app.ServerError(w, err)
 		return
 	}
 
 	if requestData.PaymentMethod == 1 {
-		err = app.Order.ActivateOrder(order_id)
+		err = app.Model.Orders.ActivateOrder(order_id)
 		if err != nil {
 			app.ServerError(w, err)
 			return
 		}
 
-		err = app.Cart.RemoveFromCart(order_id, app.Uid)
+		err = app.Model.Carts.RemoveFromCart(order_id, app.Uid)
 		if err != nil {
 			app.ServerError(w, err)
 			return
@@ -148,7 +148,7 @@ func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err, active := app.Order.OrderStatus(order_id, app.Uid)
+	err, active := app.Model.Orders.OrderStatus(order_id, app.Uid)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -159,13 +159,13 @@ func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quantity, price, err := app.Payment.ValidOrder(app.Uid, order_id)
+	quantity, price, err := app.Model.Payments.ValidOrder(app.Uid, order_id)
 	if err != nil {
 		app.ServerError(w, err)
 		return
 	}
 
-	err = app.Product.ProductQuantity(order_id, quantity)
+	err = app.Model.Products.ProductQuantity(order_id, quantity)
 	if err != nil {
 		if err == models.ErrNoRecord {
 			app.ErrorMessage(w, 200, "Not enough quantity")
@@ -178,13 +178,13 @@ func (app *Application) MakePayment(w http.ResponseWriter, r *http.Request) {
 
 	total_price := quantity * price
 	app.InfoLog.Print(total_price)
-	err = app.Order.ActivateOrder(order_id)
+	err = app.Model.Orders.ActivateOrder(order_id)
 	if err != nil {
 		app.ServerError(w, err)
 		return
 	}
 
-	err = app.Cart.RemoveFromCart(order_id, app.Uid)
+	err = app.Model.Carts.RemoveFromCart(order_id, app.Uid)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -201,7 +201,7 @@ func (app *Application) OrderReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order_info, err := app.Order.OrderInfo(order_id, app.Uid)
+	order_info, err := app.Model.Orders.OrderInfo(order_id, app.Uid)
 	if err != nil {
 		if err == models.ErrNoRecord {
 			app.NotFound(w)
@@ -225,7 +225,7 @@ func (app *Application) UpdateOrderQuantity(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err = app.Order.UpdateOrderQuantity(quantity, app.Uid, order_id)
+	err = app.Model.Orders.UpdateOrderQuantity(quantity, app.Uid, order_id)
 	if err != nil {
 		app.ServerError(w, err)
 		return

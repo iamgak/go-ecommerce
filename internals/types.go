@@ -1,4 +1,26 @@
-package models
+package data
+
+import "database/sql"
+
+type Models struct {
+	Carts    CartDB
+	Orders   OrderDB
+	Users    UserDB
+	Sellers  SellerDB
+	Products ProductDB
+	Payments PaymentDB
+}
+
+func NewModels(db *sql.DB) Models {
+	return Models{
+		Carts:    CartDB{DB: db},
+		Orders:   OrderDB{DB: db},
+		Sellers:  SellerDB{DB: db},
+		Users:    UserDB{DB: db},
+		Products: ProductDB{DB: db},
+		Payments: PaymentDB{DB: db},
+	}
+}
 
 type User struct {
 	Email    string `json:"email"`

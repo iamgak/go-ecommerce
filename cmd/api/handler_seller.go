@@ -17,13 +17,13 @@ func (app *Application) SellerRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.Seller.ErrorCheck(input)
+	validator := app.Model.Sellers.ErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
-	Valid, err := app.Seller.EmailExist(input.Email)
+	Valid, err := app.Model.Sellers.EmailExist(input.Email)
 	if err != nil && err != sql.ErrNoRows {
 		app.ServerError(w, err)
 		return
@@ -34,7 +34,7 @@ func (app *Application) SellerRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = app.Seller.CreateAccount(input)
+	err = app.Model.Sellers.CreateAccount(input)
 	if err != nil {
 		app.InfoLog.Print(err)
 		return
@@ -51,13 +51,13 @@ func (app *Application) SellerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.User.ErrorCheck(input)
+	validator := app.Model.Users.ErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
-	token, err := app.Seller.Login(input)
+	token, err := app.Model.Sellers.Login(input)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			app.ErrorMessage(w, http.StatusNotFound, "Incorrect Credentials")
@@ -87,7 +87,7 @@ func (app *Application) SellerActivationToken(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	err := app.Seller.ActivateAccount(activation_token)
+	err := app.Model.Sellers.ActivateAccount(activation_token)
 	if err != nil {
 		if err == models.ErrNoRecord {
 			app.NotFound(w)
@@ -111,14 +111,14 @@ func (app *Application) SellerForgetPassword(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	validator := app.User.ForgetPasswordErrorCheck(input)
+	validator := app.Model.Users.ForgetPasswordErrorCheck(input)
 
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
-	err = app.Seller.ResetPassword(input.Email)
+	err = app.Model.Sellers.ResetPassword(input.Email)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -135,7 +135,7 @@ func (app *Application) SellerNewPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user_id, err := app.Seller.ResetPasswordURI(reset_token)
+	user_id, err := app.Model.Sellers.ResetPasswordURI(reset_token)
 	if err != nil {
 		app.NotFound(w)
 		app.InfoLog.Print(err)
@@ -149,13 +149,13 @@ func (app *Application) SellerNewPassword(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	validator := app.User.NewPasswordErrorCheck(input)
+	validator := app.Model.Users.NewPasswordErrorCheck(input)
 	if len(validator) > 0 {
 		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
-	err = app.User.NewPassword(user_id, input.Password)
+	err = app.Model.Users.NewPassword(user_id, input.Password)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -181,7 +181,7 @@ func (app *Application) SellerLogout(w http.ResponseWriter, r *http.Request) {
 		// HttpOnly: true,
 	})
 
-	err = app.User.Logout(cookie.Value)
+	err = app.Model.Users.Logout(cookie.Value)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -200,8 +200,8 @@ func (app *Application) ValidSeller(r *http.Request) (int, error) {
 		return 0, err
 	}
 
-	// Validate the token using the app.Seller.ValidToken method
-	id, err := app.Seller.ValidToken(cookie.Value)
+	// Validate the token using the app.Model.Sellers.ValidToken method
+	id, err := app.Model.Sellers.ValidToken(cookie.Value)
 	if err != nil {
 		if errors.Is(err, models.ErrNoRecord) {
 			return id, models.ErrNoRecord

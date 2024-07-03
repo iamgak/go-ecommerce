@@ -23,14 +23,14 @@ func (app *Application) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.Product.ProductErrorCheck(input)
+	validator := app.Model.Products.ProductErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
 	input.Uid = app.Uid
-	err = app.Product.UpdateProduct(input, product_id)
+	err = app.Model.Products.UpdateProduct(input, product_id)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -47,14 +47,14 @@ func (app *Application) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.Product.ProductErrorCheck(input)
+	validator := app.Model.Products.ProductErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
 	input.Uid = app.Uid
-	err = app.Product.CreateProduct(input)
+	err = app.Model.Products.CreateProduct(input)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -71,7 +71,7 @@ func (app *Application) CreateProductAddr(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	err = app.Product.UserProductExist(product_id, app.Uid)
+	err = app.Model.Products.UserProductExist(product_id, app.Uid)
 	if err != nil {
 		app.NotFound(w)
 		app.InfoLog.Print(err)
@@ -85,14 +85,14 @@ func (app *Application) CreateProductAddr(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	validator := app.Product.ProductAddrErrorCheck(input)
+	validator := app.Model.Products.ProductAddrErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
 	input.Order_id = product_id
-	err = app.Product.CreateProductAddr(input)
+	err = app.Model.Products.CreateProductAddr(input)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -109,7 +109,7 @@ func (app *Application) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = app.Product.DeleteProduct(app.Uid, product_id)
+	err = app.Model.Products.DeleteProduct(app.Uid, product_id)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -131,7 +131,7 @@ func (app *Application) UpdateProductQuantity(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	err = app.Product.UpdateProductQuantity(product_id, app.Uid, quantity)
+	err = app.Model.Products.UpdateProductQuantity(product_id, app.Uid, quantity)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -141,7 +141,7 @@ func (app *Application) UpdateProductQuantity(w http.ResponseWriter, r *http.Req
 }
 
 func (app *Application) ProductListing(w http.ResponseWriter, r *http.Request) {
-	data, err := app.Product.ProductListing()
+	data, err := app.Model.Products.ProductListing()
 	if err != nil {
 		app.ServerError(w, err)
 		return

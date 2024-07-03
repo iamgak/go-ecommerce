@@ -7,9 +7,10 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
-	models "github.com/iamgak/go-ecommerce/internals"
+	data "github.com/iamgak/go-ecommerce/internals"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -23,12 +24,7 @@ type Application struct {
 	InfoLog         *log.Logger
 	ErrorLog        *log.Logger
 	DB              *sql.DB
-	Cart            models.CartModelInterface
-	Order           models.OrderModelInterface
-	User            models.UserModelInterface
-	Product         models.ProductModelInterface
-	Payment         models.PaymentModelInterface
-	Seller          models.SellerModelInterface
+	Model           data.Models
 	Uid             int
 	isAuthenticated bool
 }
@@ -61,24 +57,53 @@ func main() {
 	}
 
 	dbUser := os.Getenv("DB_USERNAME")
-	// port := os.Getenv("PORT")
+
+	port, err := strconv.Atoi(os.Getenv("PORT"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db_max_open_conns, err := strconv.Atoi(os.Getenv("db-max-open-conns"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	db_max_idle_conns, err := strconv.Atoi(os.Getenv("db-max-idle-conns"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	limiter_enabled, err := strconv.ParseBool(os.Getenv("limiter-enabled"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	limiter_rep, err := strconv.ParseFloat(os.Getenv("limiter-rep"), 32)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	limiter_burst, err := strconv.Atoi(os.Getenv("limiter-burst"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	dbName := os.Getenv("DB_NAME")
 	dbPassword := os.Getenv("DB_PASSWORD")
 	dbHost := os.Getenv("DB_HOST")
 	// addr := flag.String("addr", ":"+port, "HTTP network address")
 	dsn := fmt.Sprintf("host=%s port=5432 user=%s password=%s dbname=%s sslmode=disable", dbHost, dbUser, dbPassword, dbName)
 
-	flag.IntVar(&cfg.port, "port", 4000, "API server port")
-	flag.StringVar(&cfg.env, "env", "development", "Environment (development|staging|production)")
+	flag.IntVar(&cfg.port, "port", port, "API server port")
+	flag.StringVar(&cfg.env, "env", os.Getenv("env"), "Environment (development|staging|production)")
 	flag.StringVar(&cfg.db.dsn, "db-dsn", dsn, "PostgreSQL DSN")
 	// Read the connection pool settings from command-line flags into the config struct.
 	// Notice the default values that we're using?
-	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", 25, "PostgreSQL max open connections")
-	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", 25, "PostgreSQL max idle connections")
-	flag.StringVar(&cfg.db.maxIdleTime, "db-max-idle-time", "15m", "PostgreSQL max connection idle time")
-	flag.Float64Var(&cfg.limiter.rps, "limiter-rep", 1, "Rate limiter maximum requests per second")
-	flag.IntVar(&cfg.limiter.burst, "limiter-burst", 1, "Rate limiter maximum burst")
-	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", true, "Enable rate limiter")
+	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns", db_max_open_conns, "PostgreSQL max open connections")
+	flag.IntVar(&cfg.db.maxIdleConns, "db-max-idle-conns", db_max_idle_conns, "PostgreSQL max idle connections")
+	flag.StringVar(&cfg.db.maxIdleTime, "db-max-idle-time", os.Getenv("db_max_idle_time"), "PostgreSQL max connection idle time")
+	flag.Float64Var(&cfg.limiter.rps, "limiter-rep", limiter_rep, "Rate limiter maximum requests per second")
+	flag.IntVar(&cfg.limiter.burst, "limiter-burst", limiter_burst, "Rate limiter maximum burst")
+	flag.BoolVar(&cfg.limiter.enabled, "limiter-enabled", limiter_enabled, "Enable rate limiter")
 
 	flag.Parse()
 	db, err := openDB(cfg)
@@ -93,12 +118,7 @@ func main() {
 		ErrorLog: errorLog,
 		InfoLog:  infoLog,
 		DB:       db,
-		User:     &models.UserDB{DB: db},
-		Cart:     &models.CartDB{DB: db},
-		Order:    &models.OrderDB{DB: db},
-		Product:  &models.ProductDB{DB: db},
-		Payment:  &models.PaymentDB{DB: db},
-		Seller:   &models.SellerDB{DB: db},
+		Model:    data.NewModels(db),
 	}
 
 	srv := &http.Server{

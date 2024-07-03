@@ -18,13 +18,13 @@ func (app *Application) UserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.User.ErrorCheck(input)
+	validator := app.Model.Users.ErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
-	token, err := app.User.Login(input)
+	token, err := app.Model.Users.Login(input)
 	if err != nil {
 		if err == models.ErrNoRecord {
 			app.FinalMessage(w, http.StatusAccepted, "Incorrect Credentials")
@@ -55,13 +55,13 @@ func (app *Application) UserRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.User.ErrorCheck(input)
+	validator := app.Model.Users.ErrorCheck(input)
 	if len(validator) != 0 {
 		app.ErrorMessage(w, 200, validator)
 		return
 	}
 
-	inValid, err := app.User.EmailExist(input.Email)
+	inValid, err := app.Model.Users.EmailExist(input.Email)
 	if err != nil && err != sql.ErrNoRows {
 		app.InfoLog.Print(err)
 		return
@@ -72,7 +72,7 @@ func (app *Application) UserRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = app.User.CreateAccount(input)
+	err = app.Model.Users.CreateAccount(input)
 	if err != nil {
 		app.InfoLog.Print(err)
 		return
@@ -89,7 +89,7 @@ func (app *Application) UserActivationToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := app.User.ActivateAccount(activation_token)
+	err := app.Model.Users.ActivateAccount(activation_token)
 	if err != nil {
 		if err == models.ErrNoRecord {
 			app.NotFound(w)
@@ -112,14 +112,14 @@ func (app *Application) UserForgetPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	validator := app.User.ForgetPasswordErrorCheck(input)
+	validator := app.Model.Users.ForgetPasswordErrorCheck(input)
 
 	if len(validator) != 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
-	err = app.User.ResetPassword(input.Email)
+	err = app.Model.Users.ResetPassword(input.Email)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -136,7 +136,7 @@ func (app *Application) NewPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user_id, err := app.User.ResetPasswordURI(reset_token)
+	user_id, err := app.Model.Users.ResetPasswordURI(reset_token)
 	if err != nil {
 		app.NotFound(w)
 		app.InfoLog.Print(err)
@@ -150,13 +150,13 @@ func (app *Application) NewPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validator := app.User.NewPasswordErrorCheck(input)
+	validator := app.Model.Users.NewPasswordErrorCheck(input)
 	if len(validator) > 0 {
 		app.ErrorMessage(w, http.StatusAccepted, validator)
 		return
 	}
 
-	err = app.User.NewPassword(user_id, input.Password)
+	err = app.Model.Users.NewPassword(user_id, input.Password)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -182,7 +182,7 @@ func (app *Application) UserLogout(w http.ResponseWriter, r *http.Request) {
 		// HttpOnly: true,
 	})
 
-	err = app.User.Logout(cookie.Value)
+	err = app.Model.Users.Logout(cookie.Value)
 	if err != nil {
 		app.ServerError(w, err)
 		return
@@ -202,7 +202,7 @@ func (app *Application) ValidUser(r *http.Request) (int, error) {
 	}
 
 	// Validate the token using the app.Seller.ValidToken method
-	id, err := app.User.ValidToken(cookie.Value)
+	id, err := app.Model.Users.ValidToken(cookie.Value)
 	if err != nil {
 		if errors.Is(err, models.ErrNoRecord) {
 			return id, models.ErrNoRecord

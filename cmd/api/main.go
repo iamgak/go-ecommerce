@@ -4,15 +4,14 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	data "github.com/iamgak/go-ecommerce/internals"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-
-	data "github.com/iamgak/go-ecommerce/internals"
-	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
 )
 
 type Config struct {

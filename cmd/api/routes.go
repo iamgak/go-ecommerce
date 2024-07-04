@@ -2,56 +2,64 @@ package main
 
 import (
 	"expvar"
-	"net/http"
-
+	"github.com/julienschmidt/httprouter"
 	"github.com/justinas/alice"
+	"net/http"
 )
 
 func (app *Application) routes() http.Handler {
-	mux := http.NewServeMux()
+	// router := http.NewServeMux()
+	router := httprouter.New()
+
+	//404 page
+	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.NotFound(w)
+	})
 
 	//home page
-	mux.HandleFunc("/", app.home)
+	router.HandlerFunc(http.MethodGet, "/", app.home)
 
 	// customer
-	mux.HandleFunc("/api/user/register/", app.UserRegister)
-	mux.HandleFunc("/api/user/login/", app.UserLogin)
-	mux.HandleFunc("/api/user/activate_account/", app.UserActivationToken)
-	mux.HandleFunc("/api/user/logout/", app.UserLogout)
-	mux.HandleFunc("/api/user/forget-password/", app.UserForgetPassword)
-	mux.HandleFunc("/api/user/new-password/", app.NewPassword)
+	router.HandlerFunc(http.MethodPost, "/api/user/register/", app.UserRegister)
+	router.HandlerFunc(http.MethodPost, "/api/user/login/", app.UserLogin)
+	router.HandlerFunc(http.MethodGet, "/api/user/activate_account/", app.UserActivationToken)
+	router.HandlerFunc(http.MethodGet, "/api/user/logout/", app.UserLogout)
+	router.HandlerFunc(http.MethodPost, "/api/user/forget-password/", app.UserForgetPassword)
+	router.HandlerFunc(http.MethodPost, "/api/user/new-password/", app.NewPassword)
 
 	//seller
-	mux.HandleFunc("/api/seller/register/", app.SellerRegister)
-	mux.HandleFunc("/api/seller/login/", app.SellerLogin)
-	mux.HandleFunc("/api/seller/forget-password/", app.SellerForgetPassword)
-	mux.HandleFunc("/api/seller/new-password/", app.SellerNewPassword)
-	mux.HandleFunc("/api/seller/logout/", app.SellerLogout)
-	mux.HandleFunc("/api/seller/activate_account/", app.SellerActivationToken)
+	router.HandlerFunc(http.MethodPost, "/api/seller/register/", app.SellerRegister)
+	router.HandlerFunc(http.MethodPost, "/api/seller/login/", app.SellerLogin)
+	router.HandlerFunc(http.MethodPost, "/api/seller/forget-password/", app.SellerForgetPassword)
+	router.HandlerFunc(http.MethodPost, "/api/seller/new-password/", app.SellerNewPassword)
+	router.HandlerFunc(http.MethodGet, "/api/seller/logout/", app.SellerLogout)
+	router.HandlerFunc(http.MethodGet, "/api/seller/activate_account/", app.SellerActivationToken)
 
 	seller := alice.New(app.SellerAuthentication)
 
-	mux.Handle("/api/add/product/", seller.ThenFunc(app.CreateProduct))
-	mux.Handle("/api/add/product/addr/", seller.ThenFunc(app.CreateProductAddr))
-	mux.Handle("/api/delete/product/", seller.ThenFunc(app.DeleteProduct))
-	mux.Handle("/api/update/product/", seller.ThenFunc(app.UpdateProduct))
+	router.Handler(http.MethodPost, "/api/add/product/", seller.ThenFunc(app.CreateProduct))
+	router.Handler(http.MethodPost, "/api/add/product/addr/", seller.ThenFunc(app.CreateProductAddr))
+	router.Handler(http.MethodPut, "/api/delete/product/", seller.ThenFunc(app.DeleteProduct))
+	router.Handler(http.MethodPut, "/api/update/product/", seller.ThenFunc(app.UpdateProduct))
 
 	customer := alice.New(app.UserAuthentication)
 
-	mux.Handle("/api/add/cart/", customer.ThenFunc(app.CreateCart))
-	mux.Handle("/api/cart/delete/", customer.ThenFunc(app.RemoveFromCart))
-	mux.Handle("/api/cart/listing/", customer.ThenFunc(app.CartListing))
-	mux.Handle("/api/add/order/", customer.ThenFunc(app.CreateOrder))
+	router.Handler(http.MethodPost, "/api/add/cart/", customer.ThenFunc(app.CreateCart))
+	router.Handler(http.MethodDelete, "/api/cart/delete/", customer.ThenFunc(app.RemoveFromCart))
+	router.Handler(http.MethodGet, "/api/cart/listing/", customer.ThenFunc(app.CartListing))
+	router.Handler(http.MethodPost, "/api/add/order/", customer.ThenFunc(app.CreateOrder))
 
-	mux.Handle("/api/order/listing/", customer.ThenFunc(app.OrderListing))
-	mux.Handle("/api/order/payment/", customer.ThenFunc(app.MakePayment))
-	mux.Handle("/api/order/review/", customer.ThenFunc(app.OrderReview))
-	mux.Handle("/api/order/cancel/", customer.ThenFunc(app.CancelOrder))
+	router.Handler(http.MethodGet, "/api/order/listing/", customer.ThenFunc(app.OrderListing))
+	router.Handler(http.MethodPost, "/api/order/payment/", customer.ThenFunc(app.MakePayment))
+	router.Handler(http.MethodGet, "/api/order/review/", customer.ThenFunc(app.OrderReview))
+	router.Handler(http.MethodPatch, "/api/order/cancel/", customer.ThenFunc(app.CancelOrder))
 
-	mux.HandleFunc("/api/product/listing/", app.ProductListing)
-	mux.Handle("/api/dbg/", expvar.Handler())
+	router.HandlerFunc(http.MethodGet, "/api/product/listing/", app.ProductListing)
+	router.Handler(http.MethodGet, "/api/dbg/", expvar.Handler())
 
-	standard := alice.New(app.rateLimit, secureHeaders, app.recoverPanic)
-	return standard.Then(mux)
+	//Added RateLimiter, SecureHeader, RecoverPanic, running status / metrics
+	standard := alice.New(app.rateLimit, secureHeaders, app.recoverPanic, app.metrics)
+
+	return standard.Then(router)
 
 }

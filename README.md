@@ -50,7 +50,7 @@ or to sell product by Add/Remove Product, Add/Delete Discount, Change StockQuant
 Go (Golang) for building the backend services
 RESTful APIs for client-server communication
 Customizable Stateful token for secure authentication 
-Mutex for locking goroutines in query and also in ratelimiter using package `mutex`
+Mutex for locking goroutines in query and also in ratelimiter using package `mutex` and `sync`
 Rate limiter to limit request using package `golang.org/x/time/rate` 
 And added query timeout, db limit maxconnection, max idle/in-use connection using package `context`
 
@@ -101,4 +101,5 @@ Optimize queries and indexing for performance
 `https://localhost:4000/order/payment-info/id/`,`https://localhost:4000/order/submitted/id/`
 
 ## Conclusion
-Building an e-commerce platform involves a lot of components, and attention to detail is crucial for providing a seamless and secure shopping experience.
+Contributions are welcome! If you'd like to contribute to this project, please fork the repository and submit a pull request with your changes.
+Building an e-commerce platform involves a lot of components, and attention to detail is crucial for providing a seamless and secure shopping experience. This is just a minitare version of ecommerce without delivery management, smtp connection, without payment api and not account realtime goroutine, traffic, query optimisation.

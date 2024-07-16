@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"expvar"
 	"flag"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	data "github.com/iamgak/go-ecommerce/internals"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 type Config struct {
@@ -25,7 +25,6 @@ type Application struct {
 	Config          config
 	InfoLog         *log.Logger
 	ErrorLog        *log.Logger
-	DB              *sql.DB
 	Model           data.Models
 	Uid             int
 	isAuthenticated bool
@@ -132,12 +131,20 @@ func main() {
 		return time.Now().Unix()
 	}))
 
+	redis_name := "localhost"
+	redis_password := ""
+	redis_port := 6379
+	client := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%d", redis_name, redis_port),
+		Password: redis_password, // no password set
+		DB:       0,              // use default DB
+	})
+
 	app := &Application{
 		Config:   cfg,
 		ErrorLog: errorLog,
 		InfoLog:  infoLog,
-		DB:       db,
-		Model:    data.NewModels(db),
+		Model:    data.NewModels(db, client),
 	}
 
 	srv := &http.Server{

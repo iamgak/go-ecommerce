@@ -3,12 +3,11 @@ package main
 import (
 	"expvar"
 	"fmt"
+	"golang.org/x/time/rate"
 	"net"
 	"net/http"
 	"sync"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 func secureHeaders(next http.Handler) http.Handler {

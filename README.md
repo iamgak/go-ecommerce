@@ -53,10 +53,12 @@ Customizable Stateful token for secure authentication
 Mutex for locking goroutines in query and also in ratelimiter using package `mutex` and `sync`
 Rate limiter to limit request using package `golang.org/x/time/rate` 
 And added query timeout, db limit maxconnection, max idle/in-use connection using package `context`
+Migrate go package for database versioning
+Make for customize command
 
 - Database:
 PostGres for storing data
-<!-- Redis for caching -->
+Redis for caching
 <!-- 
 - Payment Gateway Integration:
 Stripe, PayPal, or other payment processors
@@ -65,7 +67,8 @@ Stripe, PayPal, or other payment processors
 SMTP server or email service providers like SendGrid, TempMail or Mailgun for sending transactional emails
 
 - Search Engine:
-Elasticsearch for advanced search capabilities -->
+Elasticsearch for advanced search capabilities
+ -->
 
 ## Security Measures
 

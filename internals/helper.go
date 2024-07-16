@@ -4,12 +4,11 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"golang.org/x/crypto/bcrypt"
 	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 func CreateLoginToken(uid int, r *http.Request) string {

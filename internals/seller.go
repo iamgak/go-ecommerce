@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"database/sql"
 	"regexp"
 
@@ -8,26 +9,11 @@ import (
 )
 
 type SellerDB struct {
-	DB *sql.DB
+	db  *sql.DB
+	ctx context.Context
 }
 
-type SellerModelInterface interface {
-	CreateAccount(*Seller) error
-	ResetPassword(string) error
-	ResetPasswordURI(string) (int, error)
-	NewPassword(int, string) error
-	ValidToken(string) (int, error)
-	Login(*User) (string, error)
-	EmailExist(string) (bool, error)
-	Logout(string) error
-	ActivateAccount(string) error
-	ErrorCheck(*Seller) map[string]string
-	ForgetPasswordErrorCheck(*ForgetPassword) map[string]string
-	NewPasswordErrorCheck(*NewPassword) map[string]string
-	SellerLog(string, int) error
-}
-
-func (u *SellerDB) CreateAccount(user *Seller) error {
+func (s *SellerDB) CreateAccount(user *Seller) error {
 	newHashedPassword, err := GeneratePassword(user.Password)
 	if err != nil {
 		return ErrCantUseGeneratePassword
@@ -35,18 +21,20 @@ func (u *SellerDB) CreateAccount(user *Seller) error {
 
 	token := GenerateToken()
 	var user_id int
-	err = u.DB.QueryRow("INSERT INTO seller_listing (email, hashed_password,company_name, region_id, district_id, pincode, addr, pancard,mobile,activation_token) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id", user.Email, string(newHashedPassword), user.CompanyName, user.Region_id, user.District_id, user.Pincode, user.Addr, user.Pancard, user.Mobile, token).Scan(&user_id)
+
+	err = s.db.QueryRowContext(s.ctx, "INSERT INTO seller_listing (email, hashed_password,company_name, region_id, district_id, pincode, addr, pancard,mobile,activation_token) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id", user.Email, string(newHashedPassword), user.CompanyName, user.Region_id, user.District_id, user.Pincode, user.Addr, user.Pancard, user.Mobile, token).Scan(&user_id)
 	if err == nil {
-		err = u.SellerLog("Account Activate", user_id)
+		err = s.SellerLog("Account Activate", user_id)
 		return err
 	}
 
 	return err
 }
 
-func (u *SellerDB) ActivateAccount(token string) error {
+func (s *SellerDB) ActivateAccount(token string) error {
 	var user_id int
-	err := u.DB.QueryRow("UPDATE seller_listing SET activation_token = NULL, active = TRUE WHERE activation_token = $1 RETURNING id", token).Scan(&user_id)
+
+	err := s.db.QueryRowContext(s.ctx, "UPDATE seller_listing SET activation_token = NULL, active = TRUE WHERE activation_token = $1 RETURNING id", token).Scan(&user_id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return ErrNoRecord
@@ -55,15 +43,15 @@ func (u *SellerDB) ActivateAccount(token string) error {
 		return err
 	}
 
-	err = u.SellerLog("Account Activate", user_id)
+	err = s.SellerLog("Account Activate", user_id)
 	return err
 }
 
-func (u *SellerDB) ValidCredentials(user *User) (int, error) {
+func (s *SellerDB) ValidCredentials(user *User) (int, error) {
 	var id int
 	var hashedPassword string
 
-	err := u.DB.QueryRow("SELECT id, hashed_password FROM seller_listing WHERE email = $1 AND active = TRUE", user.Email).Scan(&id, &hashedPassword)
+	err := s.db.QueryRowContext(s.ctx, "SELECT id, hashed_password FROM seller_listing WHERE email = $1 AND active = TRUE", user.Email).Scan(&id, &hashedPassword)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, ErrNoRecord
@@ -80,33 +68,35 @@ func (u *SellerDB) ValidCredentials(user *User) (int, error) {
 	return id, err
 }
 
-func (u *SellerDB) Login(user *User) (string, error) {
-	user_id, err := u.ValidCredentials(user)
+func (s *SellerDB) Login(user *User) (string, error) {
+	user_id, err := s.ValidCredentials(user)
 	if err != nil {
 		return "", err
 	}
 
 	token := GenerateToken()
-	_, err = u.DB.Exec("UPDATE seller_listing SET login_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2", token, user_id)
+	_, err = s.db.Exec("UPDATE seller_listing SET login_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2", token, user_id)
 	if err == nil {
-		err = u.SellerLog("Seller Login", user_id)
+		err = s.SellerLog("Seller Login", user_id)
 	}
 
 	return token, err
 }
 
-func (u *SellerDB) Logout(token string) error {
+func (s *SellerDB) Logout(token string) error {
 	var user_id int
-	err := u.DB.QueryRow("UPDATE seller_listing SET login_token = NULL WHERE login_token = $1", token).Scan(&user_id)
+
+	err := s.db.QueryRowContext(s.ctx, "UPDATE seller_listing SET login_token = NULL WHERE login_token = $1", token).Scan(&user_id)
 	if err == nil {
-		err = u.SellerLog("Seller LogOut", user_id)
+		err = s.SellerLog("Seller LogOut", user_id)
 	}
 	return err
 }
 
-func (u *SellerDB) ValidToken(token string) (int, error) {
+func (s *SellerDB) ValidToken(token string) (int, error) {
 	var id int
-	err := u.DB.QueryRow("SELECT id FROM seller_listing WHERE login_token = $1 AND active = TRUE", token).Scan(&id)
+
+	err := s.db.QueryRowContext(s.ctx, "SELECT id FROM seller_listing WHERE login_token = $1 AND active = TRUE", token).Scan(&id)
 	if err != nil && err == sql.ErrNoRows {
 		return id, ErrNoRecord
 	}
@@ -114,31 +104,33 @@ func (u *SellerDB) ValidToken(token string) (int, error) {
 	return id, err
 }
 
-func (u *SellerDB) EmailExist(email string) (bool, error) {
+func (s *SellerDB) EmailExist(email string) (bool, error) {
 	var validId int
-	err := u.DB.QueryRow("SELECT 1 FROM seller_listing WHERE email = $1", email).Scan(&validId)
+
+	err := s.db.QueryRowContext(s.ctx, "SELECT 1 FROM seller_listing WHERE email = $1", email).Scan(&validId)
 	return validId > 0, err
 }
 
-func (u *SellerDB) ResetPassword(email string) error {
+func (s *SellerDB) ResetPassword(email string) error {
 	var user_id int
-	err := u.DB.QueryRow("SELECT id FROM seller_listing WHERE email = $1 AND active = TRUE", email).Scan(&user_id)
+
+	err := s.db.QueryRowContext(s.ctx, "SELECT id FROM seller_listing WHERE email = $1 AND active = TRUE", email).Scan(&user_id)
 	if err != nil {
 		return err
 	}
 
 	uri := GenerateToken()
-	_, _ = u.DB.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
-	_, err = u.DB.Exec("INSERT INTO user_forget_passw (user_id,uri) VALUES ($1,$2)", user_id, uri)
+	_, _ = s.db.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
+	_, err = s.db.Exec("INSERT INTO user_forget_passw (user_id,uri) VALUES ($1,$2)", user_id, uri)
 	if err == nil {
-		err = u.SellerLog("Forget Password Requested", user_id)
+		err = s.SellerLog("Forget Password Requested", user_id)
 		return err
 	}
 
 	return err
 }
 
-func (u *SellerDB) ForgetPasswordErrorCheck(user *ForgetPassword) map[string]string {
+func (s *SellerDB) ForgetPasswordErrorCheck(user *ForgetPassword) map[string]string {
 	validator := &validator.Validator{Errors: make(map[string]string)}
 	validator.CheckField(validator.NotBlank(user.Email), "Email", "Email field Cannot be Empty")
 	if user.Email != "" {
@@ -148,7 +140,7 @@ func (u *SellerDB) ForgetPasswordErrorCheck(user *ForgetPassword) map[string]str
 	return validator.Errors
 }
 
-func (u *SellerDB) NewPasswordErrorCheck(user *NewPassword) map[string]string {
+func (s *SellerDB) NewPasswordErrorCheck(user *NewPassword) map[string]string {
 	validator := &validator.Validator{Errors: make(map[string]string)}
 	validator.CheckField(validator.NotBlank(user.RepeatPassword), "RepeatPassword", "Repeat Password field Cannot be Empty")
 	validator.CheckField(validator.NotBlank(user.Password), "Password", "Password field Cannot be Empty")
@@ -163,33 +155,34 @@ func (u *SellerDB) NewPasswordErrorCheck(user *NewPassword) map[string]string {
 	return validator.Errors
 }
 
-func (u *SellerDB) ResetPasswordURI(reset_token string) (int, error) {
+func (s *SellerDB) ResetPasswordURI(reset_token string) (int, error) {
 	var user_id int
-	err := u.DB.QueryRow("SELECT user_id FROM user_forget_passw WHERE uri = $1 AND superseded = FALSE", reset_token).Scan(&user_id)
+
+	err := s.db.QueryRowContext(s.ctx, "SELECT user_id FROM user_forget_passw WHERE uri = $1 AND superseded = FALSE", reset_token).Scan(&user_id)
 	return user_id, err
 }
 
-func (u *SellerDB) NewPassword(user_id int, password string) error {
-	_, err := u.DB.Exec("UPDATE seller_listing SET hashed_password = $1 WHERE id = $2", password, user_id)
+func (s *SellerDB) NewPassword(user_id int, password string) error {
+	_, err := s.db.Exec("UPDATE seller_listing SET hashed_password = $1 WHERE id = $2", password, user_id)
 	if err == nil {
-		err = u.SellerLog("Reset Password", user_id)
+		err = s.SellerLog("Reset Password", user_id)
 		return err
 	}
 
 	return err
 }
 
-func (u *SellerDB) SellerLog(activity string, uid int) error {
-	_, err := u.DB.Exec("UPDATE seller_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2", activity, uid)
+func (s *SellerDB) SellerLog(activity string, uid int) error {
+	_, err := s.db.Exec("UPDATE seller_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2", activity, uid)
 	if err != nil {
 		return err
 	}
 
-	_, err = u.DB.Exec("INSERT INTO seller_log ( activity,user_id) VALUES ( $1, $2)", activity, uid)
+	_, err = s.db.Exec("INSERT INTO seller_log ( activity,user_id) VALUES ( $1, $2)", activity, uid)
 	return err
 }
 
-func (u *SellerDB) ErrorCheck(user *Seller) map[string]string {
+func (s *SellerDB) ErrorCheck(user *Seller) map[string]string {
 	validator := &validator.Validator{Errors: make(map[string]string)}
 	validator.CheckField(validator.NotBlank(user.Email), "Email", "Email field Cannot be Empty")
 	validator.CheckField(validator.NotBlank(user.Password), "Password", "Password field Cannot be Empty")

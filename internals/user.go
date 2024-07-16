@@ -1,30 +1,19 @@
 package data
 
 import (
+	"context"
 	"database/sql"
+
 	"github.com/iamgak/go-ecommerce/validator"
 )
 
 type UserDB struct {
-	DB *sql.DB
+	db  *sql.DB
+	ctx context.Context
 }
 
-type UserModelInterface interface {
-	CreateAccount(*User) error
-	ResetPassword(string) error
-	ResetPasswordURI(string) (int, error)
-	NewPassword(int, string) error
-	ValidToken(string) (int, error)
-	Login(*User) (string, error)
-	EmailExist(string) (bool, error)
-	Logout(string) error
-	ActivateAccount(string) error
-	ErrorCheck(*User) map[string]string
-	ForgetPasswordErrorCheck(*ForgetPassword) map[string]string
-	NewPasswordErrorCheck(*NewPassword) map[string]string
-	AddrErrorCheck(*UserAddr) map[string]string
-	ActivityLog(string, int) error
-	CreateAddr(*UserAddr, int) (int, error)
+func (u *UserDB) Close() {
+	u.db.Close()
 }
 
 func (u *UserDB) CreateAccount(user *User) error {
@@ -35,7 +24,7 @@ func (u *UserDB) CreateAccount(user *User) error {
 	}
 
 	var user_id int
-	err = u.DB.QueryRow("INSERT INTO user_listing (email, hashed_password, activation_token) VALUES($1,$2,$3) RETURNING id", user.Email, string(newHashedPassword), token).Scan(&user_id)
+	err = u.db.QueryRowContext(u.ctx, "INSERT INTO user_listing (email, hashed_password, activation_token) VALUES($1,$2,$3) RETURNING id", user.Email, string(newHashedPassword), token).Scan(&user_id)
 	if err != nil {
 		return ErrCantAddUser
 	}
@@ -46,7 +35,7 @@ func (u *UserDB) CreateAccount(user *User) error {
 
 func (u *UserDB) ActivateAccount(token string) error {
 	var user_id int
-	err := u.DB.QueryRow("UPDATE user_listing SET activation_token = NULL, active = TRUE WHERE activation_token = $1 RETURNING id", token).Scan(&user_id)
+	err := u.db.QueryRowContext(u.ctx, "UPDATE user_listing SET activation_token = NULL, active = TRUE WHERE activation_token = $1 RETURNING id", token).Scan(&user_id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return ErrNoRecord
@@ -77,7 +66,7 @@ func (u *UserDB) ErrorCheck(user *User) map[string]string {
 func (u *UserDB) ValidCredentials(user *User) (int, error) {
 	var id int
 	var password string
-	err := u.DB.QueryRow("SELECT id, hashed_password FROM user_listing WHERE email = $1 AND active = TRUE", user.Email).Scan(&id, &password)
+	err := u.db.QueryRowContext(u.ctx, "SELECT id, hashed_password FROM user_listing WHERE email = $1 AND active = TRUE", user.Email).Scan(&id, &password)
 	if err != nil && err == sql.ErrNoRows {
 		return id, ErrNoRecord
 	}
@@ -97,7 +86,7 @@ func (u *UserDB) Login(user *User) (string, error) {
 	}
 
 	token := GenerateToken()
-	_, err = u.DB.Exec("UPDATE user_listing SET login_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2", token, user_id)
+	_, err = u.db.Exec("UPDATE user_listing SET login_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2", token, user_id)
 	if err == nil {
 		_ = u.ActivityLog("User Login", user_id)
 	}
@@ -107,7 +96,7 @@ func (u *UserDB) Login(user *User) (string, error) {
 
 func (u *UserDB) Logout(token string) error {
 	var user_id int
-	err := u.DB.QueryRow("UPDATE user_listing SET login_token = NULL WHERE login_token = $1 RETURNING id", token).Scan(&user_id)
+	err := u.db.QueryRowContext(u.ctx, "UPDATE user_listing SET login_token = NULL WHERE login_token = $1 RETURNING id", token).Scan(&user_id)
 	if err == nil {
 		_ = u.ActivityLog("User Logout", user_id)
 	}
@@ -117,23 +106,19 @@ func (u *UserDB) Logout(token string) error {
 
 func (u *UserDB) ValidToken(token string) (int, error) {
 	var id int
-	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE login_token = $1 AND active = TRUE", token).Scan(&id)
-	if err == sql.ErrNoRows {
-		return id, ErrNoRecord
-	}
-
+	err := u.db.QueryRowContext(u.ctx, "SELECT id FROM user_listing WHERE login_token = $1 AND active = TRUE", token).Scan(&id)
 	return id, err
 }
 
 func (u *UserDB) EmailExist(email string) (bool, error) {
 	var id int
-	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1", email).Scan(&id)
+	err := u.db.QueryRowContext(u.ctx, "SELECT id FROM user_listing WHERE email = $1", email).Scan(&id)
 	return id > 0, err
 }
 
 func (u *UserDB) ResetPassword(email string) error {
 	var user_id int
-	err := u.DB.QueryRow("SELECT id FROM user_listing WHERE email = $1", email).Scan(&user_id)
+	err := u.db.QueryRowContext(u.ctx, "SELECT id FROM user_listing WHERE email = $1", email).Scan(&user_id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return ErrNoRecord
@@ -143,12 +128,12 @@ func (u *UserDB) ResetPassword(email string) error {
 	}
 
 	uri := GenerateToken()
-	_, err = u.DB.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
+	_, err = u.db.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
 	if err != nil {
 		return err
 	}
 
-	_, err = u.DB.Exec("INSERT INTO user_forget_passw (user_id,uri) VALUES ($1,$2)", user_id, uri)
+	_, err = u.db.Exec("INSERT INTO user_forget_passw (user_id,uri) VALUES ($1,$2)", user_id, uri)
 	if err == nil {
 		err = u.ActivityLog("Reset Password Requested", user_id)
 	}
@@ -183,7 +168,7 @@ func (u *UserDB) NewPasswordErrorCheck(user *NewPassword) map[string]string {
 
 func (u *UserDB) ResetPasswordURI(reset_token string) (int, error) {
 	var user_id int
-	err := u.DB.QueryRow("SELECT user_id FROM user_forget_passw WHERE uri = $1 AND superseded = FALSE", reset_token).Scan(&user_id)
+	err := u.db.QueryRowContext(u.ctx, "SELECT user_id FROM user_forget_passw WHERE uri = $1 AND superseded = FALSE", reset_token).Scan(&user_id)
 	if err != nil && err == sql.ErrNoRows {
 		return user_id, ErrNoRecord
 	}
@@ -192,12 +177,12 @@ func (u *UserDB) ResetPasswordURI(reset_token string) (int, error) {
 }
 
 func (u *UserDB) NewPassword(user_id int, password string) error {
-	_, err := u.DB.Exec("UPDATE user_listing SET hashed_password = $1 WHERE id = $2", password, user_id)
+	_, err := u.db.Exec("UPDATE user_listing SET hashed_password = $1 WHERE id = $2", password, user_id)
 	if err != nil {
 		return err
 	}
 
-	_, err = u.DB.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
+	_, err = u.db.Exec("UPDATE user_forget_passw SET superseded = TRUE WHERE user_id = $1", user_id)
 	if err != nil {
 		return err
 	}
@@ -207,12 +192,12 @@ func (u *UserDB) NewPassword(user_id int, password string) error {
 }
 
 func (u *UserDB) ActivityLog(activity string, uid int) error {
-	_, err := u.DB.Exec("UPDATE user_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2", activity, uid)
+	_, err := u.db.Exec("UPDATE user_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2", activity, uid)
 	if err != nil {
 		return err
 	}
 
-	_, err = u.DB.Exec("INSERT INTO user_log ( activity,user_id) VALUES ( $1, $2)", activity, uid)
+	_, err = u.db.Exec("INSERT INTO user_log ( activity,user_id) VALUES ( $1, $2)", activity, uid)
 	return err
 }
 func (pr *UserDB) AddrErrorCheck(user_addr *UserAddr) map[string]string {
@@ -229,8 +214,8 @@ func (pr *UserDB) AddrErrorCheck(user_addr *UserAddr) map[string]string {
 	return validator.Errors
 }
 
-func (pr *UserDB) CreateAddr(addr *UserAddr, uid int) (int, error) {
+func (u *UserDB) CreateAddr(addr *UserAddr, uid int) (int, error) {
 	var AddrId int
-	err := pr.DB.QueryRow("INSERT INTO user_addr (user_id, mobile, region_id, district_id, pincode, addr) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id ", uid, addr.Mobile, addr.Region_id, addr.District_id, addr.Pincode, addr.Addr).Scan(&AddrId)
+	err := u.db.QueryRowContext(u.ctx, "INSERT INTO user_addr (user_id, mobile, region_id, district_id, pincode, addr) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id ", uid, addr.Mobile, addr.Region_id, addr.District_id, addr.Pincode, addr.Addr).Scan(&AddrId)
 	return AddrId, err
 }

@@ -1,6 +1,12 @@
 package data
 
-import "database/sql"
+import (
+	"context"
+	"database/sql"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+)
 
 type Models struct {
 	Carts    CartDB
@@ -11,14 +17,16 @@ type Models struct {
 	Payments PaymentDB
 }
 
-func NewModels(db *sql.DB) Models {
+func NewModels(db *sql.DB, redis *redis.Client) Models {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	return Models{
-		Carts:    CartDB{DB: db},
-		Orders:   OrderDB{DB: db},
-		Sellers:  SellerDB{DB: db},
-		Users:    UserDB{DB: db},
-		Products: ProductDB{DB: db},
-		Payments: PaymentDB{DB: db},
+		Carts:    CartDB{db: db, ctx: ctx},
+		Orders:   OrderDB{db: db, ctx: ctx},
+		Sellers:  SellerDB{db: db, ctx: ctx},
+		Users:    UserDB{db: db, ctx: ctx},
+		Products: ProductDB{db: db, redis: redis, ctx: ctx},
+		Payments: PaymentDB{db: db, ctx: ctx},
 	}
 }
 

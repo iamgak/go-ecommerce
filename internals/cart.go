@@ -3,21 +3,15 @@ package data
 import (
 	"context"
 	"database/sql"
-	"time"
+	"sync"
 
 	"github.com/iamgak/go-ecommerce/validator"
 )
 
-type CartModelInterface interface {
-	AddInCart(*Cart) error
-	RemoveFromCart(int, int) error
-	ErrorCheck(*Cart) map[string]string
-	ProductExist(int) bool
-	CartListing(int) ([]*Listing, error)
-}
-
 type CartDB struct {
-	DB *sql.DB
+	db   *sql.DB
+	ctx  context.Context
+	mute sync.RWMutex
 }
 
 func (c *CartDB) CartListing(user_id int) ([]*Listing, error) {
@@ -40,10 +34,10 @@ func (c *CartDB) CartListing(user_id int) ([]*Listing, error) {
 	return cart_listing, nil
 }
 
-func (m *CartDB) Listing(query string, user_id int) ([]*Listing, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	rows, err := m.DB.QueryContext(ctx, query, user_id)
+func (c *CartDB) Listing(query string, user_id int) ([]*Listing, error) {
+	c.mute.RLock()
+	defer c.mute.Unlock()
+	rows, err := c.db.QueryContext(c.ctx, query, user_id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -56,7 +50,7 @@ func (m *CartDB) Listing(query string, user_id int) ([]*Listing, error) {
 
 	Books := []*Listing{}
 	for rows.Next() {
-		bk, err := m.ScanData(rows)
+		bk, err := c.ScanData(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -71,7 +65,7 @@ func (m *CartDB) Listing(query string, user_id int) ([]*Listing, error) {
 	return Books, err
 }
 
-func (m *CartDB) ScanData(rows *sql.Rows) (*Listing, error) {
+func (c *CartDB) ScanData(rows *sql.Rows) (*Listing, error) {
 	listing := new(Listing)
 	arg := []interface{}{
 		listing.Title,
@@ -86,16 +80,16 @@ func (m *CartDB) ScanData(rows *sql.Rows) (*Listing, error) {
 }
 
 func (c *CartDB) AddInCart(cart *Cart) error {
-	_, err := c.DB.Exec("INSERT INTO cart (user_id, product_id, quantity) VALUES ($1,$2,$3) ", cart.Uid, cart.ProductId, cart.Quantity)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	c.mute.Lock()
+	defer c.mute.Unlock()
+	_, err := c.db.Exec("INSERT INTO cart (user_id, product_id, quantity) VALUES ($1,$2,$3) ", cart.Uid, cart.ProductId, cart.Quantity)
+	return err
 }
 
 func (c *CartDB) RemoveFromCart(CartId, user_id int) error {
-	_, err := c.DB.Exec("UPDATE cart SET active = FALSE WHERE id = $1 AND user_id = $2", CartId, user_id)
+	c.mute.Lock()
+	defer c.mute.Unlock()
+	_, err := c.db.Exec("UPDATE cart SET active = FALSE WHERE id = $1 AND user_id = $2", CartId, user_id)
 	return err
 }
 
@@ -112,6 +106,8 @@ func (c *CartDB) ErrorCheck(cart *Cart) map[string]string {
 
 func (c *CartDB) ProductExist(product_id int) bool {
 	var validId int
-	_ = c.DB.QueryRow("SELECT 1 FROM product WHERE id = $1 AND active = TRUE", product_id).Scan(&validId)
+	c.mute.RLock()
+	defer c.mute.Unlock()
+	_ = c.db.QueryRowContext(c.ctx, "SELECT 1 FROM product WHERE id = $1 AND active = TRUE", product_id).Scan(&validId)
 	return validId > 0
 }

@@ -1,10 +1,15 @@
 package data
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"regexp"
+	"sync"
+	"time"
 
 	"github.com/iamgak/go-ecommerce/validator"
+	"github.com/redis/go-redis/v9"
 )
 
 type ProductModelInterface interface {
@@ -24,10 +29,19 @@ type ProductModelInterface interface {
 }
 
 type ProductDB struct {
-	DB *sql.DB
+	db    *sql.DB
+	redis *redis.Client
+	mute  *sync.RWMutex
+	ctx   context.Context
 }
 
+func (c *ProductDB) Close() {
+	c.redis.Close()
+	c.db.Close()
+}
 func (c *ProductDB) ProductListing() ([]*ProductListing, error) {
+	c.mute.RLock()
+	defer c.mute.Unlock()
 	query := `SELECT pt.title, ct.category, pt.quantity, 
 				pt.price, pt.active 
 				FROM product pt
@@ -35,19 +49,31 @@ func (c *ProductDB) ProductListing() ([]*ProductListing, error) {
 				WHERE pt.active = TRUE`
 
 	cart_listing, err := c.Listing(query)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		} else {
-			return nil, err
-		}
-	}
-
-	return cart_listing, nil
+	return cart_listing, err
 }
 
 func (m *ProductDB) Listing(stmt string) ([]*ProductListing, error) {
-	rows, err := m.DB.Query(stmt)
+
+	products := []*ProductListing{}
+	queryBytes, err := json.Marshal(stmt)
+	if err != nil {
+		panic(err)
+	}
+
+	val, err := m.redis.Get(m.ctx, string(queryBytes)).Result()
+	if err == nil {
+		// Deserialize the cached result
+		err = json.Unmarshal([]byte(val), &products)
+		if err != nil {
+			return nil, err
+		}
+
+		return products, err
+	} else if err != redis.Nil {
+		return nil, err
+	}
+
+	rows, err := m.db.Query(stmt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -58,17 +84,30 @@ func (m *ProductDB) Listing(stmt string) ([]*ProductListing, error) {
 
 	defer rows.Close()
 
-	Books := []*ProductListing{}
 	for rows.Next() {
-		bk, err := m.ScanData(rows)
+		arr := new(ProductListing)
+		arr, err := m.ScanData(rows)
 		if err != nil {
 			return nil, err
 		}
 
-		Books = append(Books, bk)
+		products = append(products, arr)
 	}
 
-	return Books, err
+	// Cache the result in Redis for 5 minutes
+	data, err := json.Marshal(products)
+	if err != nil {
+		return nil, err
+	}
+
+	err = m.redis.Set(m.ctx, string(queryBytes), data, 5*time.Minute).Err()
+	if err != nil {
+		return nil, err
+	}
+
+	m.Close()
+	return products, err
+
 }
 
 func (m *ProductDB) ScanData(rows *sql.Rows) (*ProductListing, error) {
@@ -86,7 +125,9 @@ func (m *ProductDB) ScanData(rows *sql.Rows) (*ProductListing, error) {
 }
 
 func (pr *ProductDB) DeleteProduct(user_id, product_id int) error {
-	_, err := pr.DB.Exec("UPDATE product SET active = FALSE WHERE id = $1 AND user_id = $2", user_id, product_id)
+	pr.mute.Lock()
+	defer pr.mute.Unlock()
+	_, err := pr.db.Exec("UPDATE product SET active = FALSE WHERE id = $1 AND user_id = $2", user_id, product_id)
 	if err == nil {
 		err = pr.ProductLog("Product Deleted", user_id, product_id)
 	}
@@ -95,7 +136,9 @@ func (pr *ProductDB) DeleteProduct(user_id, product_id int) error {
 }
 
 func (pr *ProductDB) UpdateProductQuantity(quantity, user_id, product_id int) error {
-	_, err := pr.DB.Exec("UPDATE product SET quantity = $1 WHERE id = $2 AND user_id = $3", quantity, user_id, product_id)
+	pr.mute.Lock()
+	defer pr.mute.Unlock()
+	_, err := pr.db.Exec("UPDATE product SET quantity = $1 WHERE id = $2 AND user_id = $3", quantity, user_id, product_id)
 	if err == nil {
 		err = pr.ProductLog("Quantity Changed", user_id, product_id)
 	}
@@ -104,7 +147,9 @@ func (pr *ProductDB) UpdateProductQuantity(quantity, user_id, product_id int) er
 }
 
 func (pr *ProductDB) ChangeProductPrice(price float32, user_id, product_id int) error {
-	_, err := pr.DB.Exec("UPDATE product SET price = $1 WHERE id = $2 AND user_id = $3", price, user_id, product_id)
+	pr.mute.Lock()
+	defer pr.mute.Unlock()
+	_, err := pr.db.Exec("UPDATE product SET price = $1 WHERE id = $2 AND user_id = $3", price, user_id, product_id)
 	if err == nil {
 		err = pr.ProductLog("Price Changed", user_id, product_id)
 	}
@@ -112,7 +157,9 @@ func (pr *ProductDB) ChangeProductPrice(price float32, user_id, product_id int) 
 }
 
 func (pr *ProductDB) UpdateProduct(obj *Product, product_id int) error {
-	_, err := pr.DB.Exec("UPDATE product SET title = $1,category = $2, sub_category = $3, description = $4, amount= $5, price = $6 WHERE user_id=$7 AND id = $8 AND active = TRUE", obj.Title, obj.Category, obj.SubCategory, obj.Description, obj.Quantity, obj.Price, obj.Uid, product_id)
+	pr.mute.Lock()
+	defer pr.mute.Unlock()
+	_, err := pr.db.Exec("UPDATE product SET title = $1,category = $2, sub_category = $3, description = $4, amount= $5, price = $6 WHERE user_id=$7 AND id = $8 AND active = TRUE", obj.Title, obj.Category, obj.SubCategory, obj.Description, obj.Quantity, obj.Price, obj.Uid, product_id)
 	if err == nil {
 		err = pr.ProductLog("Quantity Changed", obj.Uid, product_id)
 	}
@@ -146,14 +193,18 @@ func (pr *ProductDB) ProductAddrErrorCheck(obj *Product_Addr) map[string]string 
 }
 
 func (pr *ProductDB) CreateProduct(obj *Product) error {
-	_, err := pr.DB.Exec("INSERT INTO product (title,category_id, sub_category_id, quantity, price, user_id, descriptions) VALUES($1,$2,$3,$4,$5,$6,$7)", obj.Title, obj.Category, obj.SubCategory, obj.Quantity, obj.Price, obj.Uid, obj.Description)
+	pr.mute.Lock()
+	defer pr.mute.Unlock()
+	_, err := pr.db.Exec("INSERT INTO product (title,category_id, sub_category_id, quantity, price, user_id, descriptions) VALUES($1,$2,$3,$4,$5,$6,$7)", obj.Title, obj.Category, obj.SubCategory, obj.Quantity, obj.Price, obj.Uid, obj.Description)
 	return err
 }
 
 func (pr *ProductDB) CreateProductAddr(addr *Product_Addr) error {
-	_, err := pr.DB.Exec("INSERT INTO product_origin_addr (order_id, mobile, region_id, district_id, pincode, addr) VALUES ($1,$2,$3,$4,$5,$6)", addr.Order_id, addr.Mobile, addr.Region_id, addr.District_id, addr.Pincode, addr.Addr)
+	pr.mute.Lock()
+	defer pr.mute.Unlock()
+	_, err := pr.db.Exec("INSERT INTO product_origin_addr (order_id, mobile, region_id, district_id, pincode, addr) VALUES ($1,$2,$3,$4,$5,$6)", addr.Order_id, addr.Mobile, addr.Region_id, addr.District_id, addr.Pincode, addr.Addr)
 	if err == nil {
-		_, err = pr.DB.Exec("UPDATE product SET ACTIVE = TRUE WHERE id = $1", addr.Order_id)
+		_, err = pr.db.Exec("UPDATE product SET ACTIVE = TRUE WHERE id = $1", addr.Order_id)
 	}
 
 	return err
@@ -161,7 +212,7 @@ func (pr *ProductDB) CreateProductAddr(addr *Product_Addr) error {
 
 func (pr *ProductDB) UserProductExist(product_id, user_id int) error {
 	var validId int
-	err := pr.DB.QueryRow("SELECT 1 FROM product WHERE id = $1 AND uid = $3", product_id, user_id).Scan(&validId)
+	err := pr.db.QueryRowContext(pr.ctx, "SELECT 1 FROM product WHERE id = $1 AND uid = $3", product_id, user_id).Scan(&validId)
 	if err == sql.ErrNoRows {
 		return ErrNoRecord
 	}
@@ -171,20 +222,16 @@ func (pr *ProductDB) UserProductExist(product_id, user_id int) error {
 
 func (pr *ProductDB) ProductQuantity(order_id, quantity int) error {
 	var validId int
-	err := pr.DB.QueryRow("SELECT 1 FROM product INNER JOIN order_listing ON order_listing.product_id = product.id WHERE active = TRUE AND order_listing.id = $1 AND quantity >= $2 ", order_id, quantity).Scan(&validId)
-	if err == sql.ErrNoRows {
-		return ErrNoRecord
-	}
-
+	err := pr.db.QueryRowContext(pr.ctx, "SELECT 1 FROM product INNER JOIN order_listing ON order_listing.product_id = product.id WHERE active = TRUE AND order_listing.id = $1 AND quantity >= $2 ", order_id, quantity).Scan(&validId)
 	return err
 }
 
 func (pr *ProductDB) ProductLog(activity string, user_id, product_id int) error {
-	_, err := pr.DB.Exec("UPDATE product_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2 AND product_id = $3 ", activity, user_id, product_id)
+	_, err := pr.db.Exec("UPDATE product_log SET superseded = TRUE WHERE activity = $1 AND user_id = $2 AND product_id = $3 ", activity, user_id, product_id)
 	if err != nil {
 		return err
 	}
 
-	_, err = pr.DB.Exec("INSERT INTO product_log ( activity,user_id, product_id) VALUES ( $1, $2, $3)", activity, user_id, product_id)
+	_, err = pr.db.Exec("INSERT INTO product_log ( activity,user_id, product_id) VALUES ( $1, $2, $3)", activity, user_id, product_id)
 	return err
 }
